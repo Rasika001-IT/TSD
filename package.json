@@ -8,10 +8,11 @@
     "dashboard"
   ],
   "scripts": {
-    "bridge": "node bridge/index.js",
-    "dashboard:api": "node dashboard/server.js",
+    "bridge": "node --env-file-if-exists=.env bridge/index.js",
+    "dashboard:api": "node --env-file-if-exists=.env dashboard/server.js",
     "dashboard": "npm --workspace dashboard run dev",
-    "generate": "node agent/generate-cli.js",
+    "generate": "node --env-file-if-exists=.env agent/generate-cli.js",
+    "schedule": "node --env-file-if-exists=.env agent/scheduler.js",
     "test": "node --test test/*.test.js"
   },
   "dependencies": {

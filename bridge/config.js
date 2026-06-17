@@ -22,6 +22,8 @@ export const config = {
   },
 
   pollIntervalMs: Number(process.env.BRIDGE_POLL_INTERVAL_MS ?? 15000),
+  // How often the generation scheduler checks the editorial calendar.
+  schedulerIntervalMs: Number(process.env.SCHEDULER_INTERVAL_MS ?? 300000), // 5 min
   batchSize: Number(process.env.BRIDGE_BATCH_SIZE ?? 10),
   defaultMaxAttempts: Number(process.env.BRIDGE_DEFAULT_MAX_ATTEMPTS ?? 5),
   backoffBaseMs: Number(process.env.BRIDGE_BACKOFF_BASE_MS ?? 1000),

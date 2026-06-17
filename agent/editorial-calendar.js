@@ -31,9 +31,21 @@ export const PUBLISH_TIMES = Object.freeze({
   blog: { hour: 9, minute: 0 },   // 9:00 AM ET = 2:00 PM UK
 });
 
+// News publishes ASAP on approval; the agent drafts it early in the weekday
+// morning so editors have it before the workday. Slots are staggered to spread
+// out the API calls (and so a reviewer sees them trickle in, not all at once).
+export const NEWS_GENERATION = Object.freeze({ hour: 6, minute: 30, staggerMinutes: 4 });
+
 // Generate this many minutes before the target publish time, leaving room for
 // human review (the spec example: generate ~1:30pm for a 2:00pm publish).
 export const REVIEW_LEAD_MINUTES = 30;
+
+/** Deterministic idempotency key for a planned item on a given date. */
+export function sourceIdFor(date, item) {
+  const day = date.toISOString().slice(0, 10);
+  const cat = item.category.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+  return `tsd-${item.stream}-${day}-${cat}-${item.slotIndex ?? 0}`;
+}
 
 /** Compute the UTC Date for a given America/New_York wall-clock time on `date`. */
 export function etWallClockToUtc(date, hour, minute) {
@@ -72,6 +84,7 @@ export function planForDate(date = new Date()) {
   }
 
   const news = NEWS_PLAN[weekday];
+  const newsBase = etWallClockToUtc(date, NEWS_GENERATION.hour, NEWS_GENERATION.minute);
   news.categories.forEach((category, i) => {
     items.push({
       stream: 'news',
@@ -80,6 +93,7 @@ export function planForDate(date = new Date()) {
       anchor: news.anchor,
       slotIndex: i,
       scheduledFor: null, // news publishes ASAP once a human approves
+      generateBy: new Date(newsBase.getTime() + i * NEWS_GENERATION.staggerMinutes * 60 * 1000).toISOString(),
     });
   });
 
