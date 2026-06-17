@@ -39,6 +39,8 @@ export const api = {
     request('/settings/windows', { method: 'POST', body: JSON.stringify({ windows }) }),
   setModel: (model) =>
     request('/settings/model', { method: 'POST', body: JSON.stringify({ model }) }),
+  setProfile: (profile) =>
+    request('/settings/profile', { method: 'POST', body: JSON.stringify({ profile }) }),
   listPublished: () => request('/published'),
   uploadImage: (id, base64, mimeType, filename) =>
     request(`/items/${id}/image`, { method: 'POST', body: JSON.stringify({ base64, mimeType, filename }) }),

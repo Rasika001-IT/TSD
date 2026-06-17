@@ -19,6 +19,7 @@ import { generateAndQueue } from '../agent/generate-cli.js';
 import { generateAltText } from '../agent/alt-text.js';
 import { SCHEDULER_FLAG } from '../agent/scheduler.js';
 import { DEFAULT_PUBLISH_WINDOWS } from '../agent/editorial-calendar.js';
+import { PROFILE_OPTIONS, DEFAULT_COST_PROFILE } from '../agent/cost-profiles.js';
 
 const MODEL_OPTIONS = ['auto', 'claude-sonnet-4-6', 'claude-opus-4-8', 'claude-haiku-4-5'];
 
@@ -189,13 +190,27 @@ app.get('/api/settings', async (req, res) => {
   const schedulerEnabled = await repo.getSetting(SCHEDULER_FLAG, false);
   const publishWindows = await repo.getSetting('publish_windows', DEFAULT_PUBLISH_WINDOWS);
   const modelOverride = await repo.getSetting('model_override', 'auto');
+  const costProfile = await repo.getSetting('cost_profile', DEFAULT_COST_PROFILE);
   res.json({
     schedulerEnabled: !!schedulerEnabled,
     generationAvailable: config.anthropic.enabled,
     publishWindows,
     modelOverride: modelOverride ?? 'auto',
     modelOptions: MODEL_OPTIONS,
+    costProfile,
+    profileOptions: PROFILE_OPTIONS,
   });
+});
+
+// Cost profile (Balanced / Max savings / Quality-first) — bundles the spend knobs.
+app.post('/api/settings/profile', async (req, res) => {
+  const repo = await getRepo();
+  const profile = req.body?.profile;
+  if (!PROFILE_OPTIONS.includes(profile)) {
+    return res.status(400).json({ error: `profile must be one of: ${PROFILE_OPTIONS.join(', ')}` });
+  }
+  await repo.setSetting('cost_profile', profile);
+  res.json({ costProfile: profile });
 });
 
 app.post('/api/settings/scheduler', async (req, res) => {

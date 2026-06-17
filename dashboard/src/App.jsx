@@ -27,6 +27,8 @@ export default function App() {
   const [generationAvailable, setGenerationAvailable] = useState(false);
   const [model, setModel] = useState('auto');
   const [modelOptions, setModelOptions] = useState([]);
+  const [profile, setProfile] = useState('balanced');
+  const [profileOptions, setProfileOptions] = useState([]);
   const [windows, setWindows] = useState([]);
 
   const flash = useCallback((msg, isErr = false) => {
@@ -62,6 +64,8 @@ export default function App() {
         setGenerationAvailable(s.generationAvailable);
         setModel(s.modelOverride ?? 'auto');
         setModelOptions(s.modelOptions ?? []);
+        setProfile(s.costProfile ?? 'balanced');
+        setProfileOptions(s.profileOptions ?? []);
         setWindows(s.publishWindows ?? []);
       })
       .catch(() => {});
@@ -136,8 +140,11 @@ export default function App() {
             <ControlsPanel
               model={model}
               modelOptions={modelOptions}
+              profile={profile}
+              profileOptions={profileOptions}
               windows={windows}
               onModel={setModel}
+              onProfile={setProfile}
               onWindows={setWindows}
               flash={flash}
             />

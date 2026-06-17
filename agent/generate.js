@@ -28,22 +28,28 @@ import {
 } from '../shared/index.js';
 import { buildStyleGuide } from './tsd-guidelines.js';
 import { config } from '../bridge/config.js';
+import { resolveProfile } from './cost-profiles.js';
+import { estimateCost } from './pricing.js';
 
 const MODELS = Object.freeze({
   standard: 'claude-sonnet-4-6', // default, per project decision
   major: 'claude-opus-4-8',      // escalation for big/widely-covered stories
 });
 
-// Adaptive thinking is supported on the Sonnet 4.6 / Opus 4.x families but not
-// Haiku — only attach it where valid so a model override can't 400.
-const supportsThinking = (model) => /sonnet-4-6|opus-4-/.test(model);
-const thinkingFor = (model) => (supportsThinking(model) ? { thinking: { type: 'adaptive' } } : {});
+// Adaptive thinking and the effort parameter are supported on the Sonnet 4.6 /
+// Opus 4.x families but not Haiku — only attach them where valid so a model
+// choice can't 400.
+const supportsTuning = (model) => /sonnet-4-6|opus-4-/.test(model);
+const thinkingFor = (model, on) => (on && supportsTuning(model) ? { thinking: { type: 'adaptive' } } : {});
+const effortFor = (model, effort) => (effort && supportsTuning(model) ? { effort } : {});
 const normalizeOverride = (m) => (m && m !== 'auto' ? m : null);
 
-const WEB_TOOLS = [
-  { type: 'web_search_20260209', name: 'web_search' },
-  { type: 'web_fetch_20260209', name: 'web_fetch' },
-];
+// Build the web tool set for the research phase, bounded by the cost profile.
+function webTools({ maxSearches, webFetch }) {
+  const tools = [{ type: 'web_search_20260209', name: 'web_search', max_uses: maxSearches }];
+  if (webFetch) tools.push({ type: 'web_fetch_20260209', name: 'web_fetch', max_uses: maxSearches });
+  return tools;
+}
 
 // ContentType the canonical model expects, by stream.
 const STREAM_TO_TYPE = { news: ContentType.NEWS, blog: ContentType.BLOG };
@@ -79,18 +85,22 @@ function researchPrompt({ stream, category, topicHint }) {
 }
 
 /** Run the research phase. Handles the server-side-tool pause_turn loop. */
-async function research(client, { stream, category, topicHint, modelOverride }, maxContinuations = 6) {
-  const model = normalizeOverride(modelOverride) || MODELS.standard;
+async function research(client, { stream, category, topicHint, profile }, maxContinuations = 6) {
+  const r = profile.research;
+  const model = r.model;
   const messages = [{ role: 'user', content: researchPrompt({ stream, category, topicHint }) }];
+  const usages = [];
   let response;
   for (let i = 0; i <= maxContinuations; i++) {
     response = await client.messages.create({
       model,
       max_tokens: 16000,
-      ...thinkingFor(model),
-      tools: WEB_TOOLS,
+      ...thinkingFor(model, r.thinking),
+      ...effortFor(model, r.effort),
+      tools: webTools({ maxSearches: r.maxSearches, webFetch: r.webFetch }),
       messages,
     });
+    if (response.usage) usages.push({ model, usage: response.usage });
     if (response.stop_reason !== 'pause_turn') break;
     // Server-side tool loop hit its iteration cap — resume by re-sending.
     messages.push({ role: 'assistant', content: response.content });
@@ -101,7 +111,7 @@ async function research(client, { stream, category, topicHint, modelOverride }, 
     .join('\n')
     .trim();
   const prominence = /PROMINENCE:\s*major/i.test(text) ? 'major' : 'standard';
-  return { brief: text, prominence };
+  return { brief: text, prominence, usages };
 }
 
 // --- Phase 2: write + structure --------------------------------------------
@@ -200,20 +210,30 @@ export function blocksToProseMirror(blocks = []) {
   return { type: 'doc', content };
 }
 
-/** Run the write phase with structured output. Model = override, else by prominence. */
-async function write(client, { stream, brief, prominence, modelOverride }) {
-  const model = normalizeOverride(modelOverride) || (prominence === 'major' ? MODELS.major : MODELS.standard);
+/** Run the write phase with structured output. Model from override > profile > prominence. */
+async function write(client, { stream, brief, prominence, modelOverride, profile }) {
+  const w = profile.write;
+  const profileModel = w.model === 'byProminence'
+    ? (prominence === 'major' ? MODELS.major : MODELS.standard)
+    : w.model;
+  const model = normalizeOverride(modelOverride) || profileModel;
+  const effort = stream === 'blog' ? w.effortBlog : w.effortNews;
+  const guide = buildStyleGuide(stream);
+  const system = profile.promptCache
+    ? [{ type: 'text', text: guide, cache_control: { type: 'ephemeral' } }] // cache the frozen style guide
+    : guide;
   const response = await client.messages.create({
     model,
     max_tokens: stream === 'blog' ? 16000 : 8000,
-    ...thinkingFor(model),
-    system: buildStyleGuide(stream),
+    ...thinkingFor(model, w.thinking),
+    ...effortFor(model, effort),
+    system,
     output_config: { format: { type: 'json_schema', schema: outputSchema(stream) } },
     messages: [{ role: 'user', content: writePrompt({ stream, brief }) }],
   });
   const block = (response.content ?? []).find((b) => b.type === 'text');
   if (!block) throw new Error('generate: write phase returned no text');
-  return { draft: JSON.parse(block.text), model };
+  return { draft: JSON.parse(block.text), model, usage: response.usage };
 }
 
 // --- Public API -------------------------------------------------------------
@@ -274,8 +294,10 @@ export async function generate(spec, deps = {}) {
   }
   const client = deps.client ?? (await defaultClient());
   const { modelOverride } = spec;
-  const { brief, prominence } = await research(client, { ...spec, modelOverride });
-  const { draft, model } = await write(client, { stream: spec.stream, brief, prominence, modelOverride });
+  const profile = resolveProfile(spec.costProfile);
+
+  const { brief, prominence, usages } = await research(client, { ...spec, profile });
+  const { draft, model, usage: writeUsage } = await write(client, { stream: spec.stream, brief, prominence, modelOverride, profile });
   const content = draftToCanonical(draft, {
     stream: spec.stream,
     model,
@@ -283,5 +305,7 @@ export async function generate(spec, deps = {}) {
     scheduledFor: spec.scheduledFor ?? null,
     targets: spec.targets,
   });
-  return { content, prominence, brief };
+
+  const cost = estimateCost([...(usages ?? []), { model, usage: writeUsage }]);
+  return { content, prominence, brief, cost, model };
 }

@@ -32,17 +32,26 @@ function parseArgs(argv) {
 
 /** Generate one spec, attach spec warnings, persist to the review queue. */
 export async function generateAndQueue(spec, deps = {}) {
-  // Honor a dashboard-set model override (spec wins if explicitly provided).
+  // Honor dashboard-set settings (an explicit spec value wins if provided).
   const repo = await getRepo();
   const modelOverride = spec.modelOverride ?? (await repo.getSetting('model_override', null));
-  const { content, prominence, brief } = await generate({ ...spec, modelOverride }, deps);
+  const costProfile = spec.costProfile ?? (await repo.getSetting('cost_profile', 'balanced'));
+
+  const { content, prominence, brief, cost, model } = await generate({ ...spec, modelOverride, costProfile }, deps);
+
   const warnings = checkAgainstSpec(content, spec.stream);
-  if (warnings.length) {
-    const note = 'Spec check:\n' + warnings.map((w) => `- ${w}`).join('\n');
-    content.editorial.editorialNotes = [content.editorial.editorialNotes, note].filter(Boolean).join('\n\n');
+  const notes = [];
+  if (warnings.length) notes.push('Spec check:\n' + warnings.map((w) => `- ${w}`).join('\n'));
+  if (cost) {
+    notes.push(`Est. generation cost: $${cost.usd.toFixed(4)} (${model}, ${costProfile} profile; in ${cost.inputTokens} / out ${cost.outputTokens} tokens, ${cost.searches} web searches).`);
+    console.log(`[generate] "${content.title}" — ~$${cost.usd.toFixed(4)} [${model}, ${costProfile}]`);
   }
+  if (notes.length) {
+    content.editorial.editorialNotes = [content.editorial.editorialNotes, ...notes].filter(Boolean).join('\n\n');
+  }
+
   const result = await publish(content); // pending_review ⇒ stored, not enqueued
-  return { ...result, prominence, brief, warnings };
+  return { ...result, prominence, brief, warnings, cost };
 }
 
 async function runToday(deps = {}) {

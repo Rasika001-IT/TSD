@@ -88,10 +88,10 @@ function mockClient() {
         call += 1;
         if (call === 1) {
           // Research phase reply (free text + prominence line).
-          return { stop_reason: 'end_turn', content: [{ type: 'text', text: 'Angle: a deal closed.\nFact: $1B, per Reuters.\nPROMINENCE: standard' }] };
+          return { stop_reason: 'end_turn', usage: { input_tokens: 2000, output_tokens: 800, server_tool_use: { web_search_requests: 3 } }, content: [{ type: 'text', text: 'Angle: a deal closed.\nFact: $1B, per Reuters.\nPROMINENCE: standard' }] };
         }
         // Write phase reply (structured JSON as text).
-        return { stop_reason: 'end_turn', content: [{ type: 'text', text: JSON.stringify(makeDraft()) }] };
+        return { stop_reason: 'end_turn', usage: { input_tokens: 1500, output_tokens: 600 }, content: [{ type: 'text', text: JSON.stringify(makeDraft()) }] };
       },
     },
   };
@@ -99,11 +99,13 @@ function mockClient() {
 
 test('generate() runs both phases via an injected client and grounds on the brief', async () => {
   const spec = { stream: 'news', type: 'news', category: 'Deals & M&A', sourceId: 'gen-1' };
-  const { content, prominence, brief } = await generate(spec, { client: mockClient() });
+  const { content, prominence, brief, cost } = await generate(spec, { client: mockClient() });
   assert.equal(prominence, 'standard');
   assert.match(brief, /Reuters/);
   assert.equal(content.status, ContentStatus.PENDING_REVIEW);
   assert.equal(content.title, 'Major US foodservice deal reshapes the distribution market');
+  assert.ok(cost && cost.usd > 0, 'returns a cost estimate');
+  assert.equal(cost.searches, 3, 'counts web searches across phases');
 });
 
 test('generateAndQueue persists to pending_review and enqueues no jobs', async () => {

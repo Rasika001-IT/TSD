@@ -14,11 +14,22 @@ const MODEL_LABELS = {
   'claude-haiku-4-5': 'Haiku 4.5 (cheapest)',
 };
 
-export function ControlsPanel({ model, modelOptions, windows, onModel, onWindows, flash }) {
+const PROFILE_LABELS = {
+  balanced: 'Balanced (recommended)',
+  'max-savings': 'Max savings (cheapest)',
+  'quality-first': 'Quality-first',
+};
+
+export function ControlsPanel({ model, modelOptions, profile, profileOptions, windows, onModel, onProfile, onWindows, flash }) {
   const [savingWin, setSavingWin] = useState(false);
 
   const changeModel = async (value) => {
     try { await api.setModel(value); onModel(value); flash(`Model: ${MODEL_LABELS[value] ?? value}`); }
+    catch (e) { flash(e.message, true); }
+  };
+
+  const changeProfile = async (value) => {
+    try { await api.setProfile(value); onProfile(value); flash(`Cost profile: ${PROFILE_LABELS[value] ?? value}`); }
     catch (e) { flash(e.message, true); }
   };
 
@@ -32,6 +43,15 @@ export function ControlsPanel({ model, modelOptions, windows, onModel, onWindows
 
   return (
     <div className="controls-panel">
+      <label className="model-select">
+        <span>Cost profile</span>
+        <select value={profile} onChange={(e) => changeProfile(e.target.value)}>
+          {(profileOptions ?? Object.keys(PROFILE_LABELS)).map((p) => (
+            <option key={p} value={p}>{PROFILE_LABELS[p] ?? p}</option>
+          ))}
+        </select>
+      </label>
+
       <label className="model-select">
         <span>Model</span>
         <select value={model} onChange={(e) => changeModel(e.target.value)}>
