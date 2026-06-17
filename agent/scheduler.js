@@ -22,9 +22,17 @@ import { config } from '../bridge/config.js';
  * @param {Date} now
  * @param {{ run?: Function, repo?: object }} [deps]
  */
+export const SCHEDULER_FLAG = 'scheduler_enabled';
+
 export async function tickScheduler(now = new Date(), deps = {}) {
   const run = deps.run ?? ((spec) => generateAndQueue(spec));
   const repo = deps.repo ?? (await getRepo());
+
+  // Respect the dashboard on/off toggle. Default OFF — auto-generation only
+  // runs once an editor explicitly turns it on.
+  const enabled = await repo.getSetting(SCHEDULER_FLAG, false);
+  if (!enabled) return [];
+
   const { items } = planForDate(now);
   const started = [];
 

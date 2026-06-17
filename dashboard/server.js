@@ -9,10 +9,15 @@ import {
   EditorialStage,
   ReviewDecision,
 } from '../shared/index.js';
+import { PublishTarget, JobOperation } from '../shared/index.js';
 import { getRepo } from '../bridge/repo/index.js';
 import { enqueueForTargets } from '../bridge/api.js';
+import { tick } from '../bridge/poller.js';
+import { getAdapter } from '../bridge/adapters/index.js';
 import { config } from '../bridge/config.js';
 import { generateAndQueue } from '../agent/generate-cli.js';
+import { generateAltText } from '../agent/alt-text.js';
+import { SCHEDULER_FLAG } from '../agent/scheduler.js';
 
 const STREAM_FOR_TYPE = { blog: 'blog' }; // everything else is a 'news' stream
 
@@ -77,7 +82,18 @@ app.post('/api/items/:id/review', async (req, res) => {
     };
     await repo.saveCanonical(approved);
     const jobs = await enqueueForTargets(approved, repo);
-    return res.json({ content: approved, jobs });
+    // Publish live immediately rather than waiting for the next poll cycle.
+    // (Scheduled items keep their future scheduledFor; the poller honors it.)
+    let mappings = [];
+    if (nextStatus === ContentStatus.PUBLISHED) {
+      try {
+        await tick(repo);
+        mappings = await repo.listMappings(approved.id);
+      } catch (err) {
+        console.error('[review] immediate publish tick failed:', err.message);
+      }
+    }
+    return res.json({ content: approved, jobs, mappings });
   }
 
   if (decision === ReviewDecision.CHANGES_REQUESTED) {
@@ -162,6 +178,93 @@ app.post('/api/items/:id/regenerate', async (req, res) => {
     `regenerate ${content.id}`
   );
   res.status(202).json({ accepted: true });
+});
+
+// --- Scheduler on/off toggle -----------------------------------------------
+app.get('/api/settings', async (req, res) => {
+  const repo = await getRepo();
+  const schedulerEnabled = await repo.getSetting(SCHEDULER_FLAG, false);
+  res.json({ schedulerEnabled: !!schedulerEnabled, generationAvailable: config.anthropic.enabled });
+});
+
+app.post('/api/settings/scheduler', async (req, res) => {
+  const repo = await getRepo();
+  const enabled = !!(req.body?.enabled);
+  await repo.setSetting(SCHEDULER_FLAG, enabled);
+  res.json({ schedulerEnabled: enabled });
+});
+
+// --- Published posts (post-publication review) -----------------------------
+// Lists everything that has gone live, with the live URL from content_mapping.
+app.get('/api/published', async (req, res) => {
+  const repo = await getRepo();
+  const items = await repo.listCanonicalByStatus(ContentStatus.PUBLISHED);
+  const out = [];
+  for (const c of items) {
+    const mappings = await repo.listMappings(c.id);
+    out.push({
+      id: c.id,
+      title: c.title,
+      type: c.type,
+      publishedAt: c.publishedAt,
+      targets: mappings.map((m) => ({ target: m.target, remoteUrl: m.remoteUrl, remoteStatus: m.remoteStatus })),
+    });
+  }
+  out.sort((a, b) => String(b.publishedAt).localeCompare(String(a.publishedAt)));
+  res.json({ items: out });
+});
+
+// --- Featured image: editor drops an image, we upload it + auto alt text ----
+app.post('/api/items/:id/image', async (req, res) => {
+  if (!config.wordpress.baseUrl) {
+    return res.status(503).json({ error: 'WordPress not configured on the API server.' });
+  }
+  const repo = await getRepo();
+  const content = await repo.getCanonicalById(req.params.id);
+  if (!content) return res.status(404).json({ error: 'not found' });
+
+  const { base64, mimeType = 'image/jpeg', filename = 'featured.jpg', caption = null } = req.body ?? {};
+  if (!base64) return res.status(400).json({ error: 'base64 image data is required' });
+
+  try {
+    const keyword = content.seo?.focusKeyword ?? null;
+    const alt = await generateAltText({ base64, mimeType, title: content.title, keyword });
+
+    const wp = getAdapter(PublishTarget.WORDPRESS);
+    const asset = {
+      id: `featured-${content.id}`,
+      bytes: base64,
+      filename,
+      mimeType,
+      type: 'image',
+      role: 'featured',
+      license: 'owned', // an editor adding an image vouches for the rights
+      alt,
+      caption,
+    };
+    const { remoteId, url } = await wp.uploadMedia(asset);
+
+    const featuredImage = { ...asset, url, remoteId };
+    delete featuredImage.bytes; // don't persist the raw image in the canonical store
+    const updated = { ...content, featuredImage, updatedAt: new Date().toISOString() };
+    await repo.saveCanonical(updated);
+
+    // If the post is already live, attach the featured image now (update job + tick).
+    const mapping = await repo.getMapping(content.id, PublishTarget.WORDPRESS);
+    if (mapping?.remoteId) {
+      await repo.enqueueJob({
+        canonicalId: content.id,
+        target: PublishTarget.WORDPRESS,
+        operation: JobOperation.UPDATE,
+        maxAttempts: config.defaultMaxAttempts,
+      });
+      await tick(repo).catch((e) => console.error('[image] attach tick failed:', e.message));
+    }
+    res.json({ featuredImage });
+  } catch (err) {
+    console.error('[image] upload failed:', err.message);
+    res.status(502).json({ error: `Image upload failed: ${err.message}` });
+  }
 });
 
 const PORT = process.env.DASH_PORT ?? 4000;

@@ -103,10 +103,19 @@ export function createWordPressAdapter(wpConfig = {}) {
     // Upload media, then return the remote id + url. Adapters upload media FIRST,
     // then attach the id (the bridge attaches featuredImage.remoteId before create).
     async uploadMedia(asset) {
-      const res = await fetch(asset.url);
-      if (!res.ok) throw new Error(`Failed to fetch asset ${asset.url}: ${res.status}`);
-      const buf = Buffer.from(await res.arrayBuffer());
-      const filename = asset.url.split('/').pop()?.split('?')[0] || `${asset.id}.bin`;
+      // Two sources: raw bytes (editor upload — base64/Buffer in asset.bytes) or
+      // a URL to fetch (agent-supplied asset). Bytes take precedence.
+      let buf;
+      let filename;
+      if (asset.bytes) {
+        buf = Buffer.isBuffer(asset.bytes) ? asset.bytes : Buffer.from(asset.bytes, 'base64');
+        filename = asset.filename || `${asset.id}.bin`;
+      } else {
+        const res = await fetch(asset.url);
+        if (!res.ok) throw new Error(`Failed to fetch asset ${asset.url}: ${res.status}`);
+        buf = Buffer.from(await res.arrayBuffer());
+        filename = asset.url.split('/').pop()?.split('?')[0] || `${asset.id}.bin`;
+      }
       const created = await request('/wp/v2/media', {
         method: 'POST',
         raw: { data: buf, contentType: asset.mimeType || 'application/octet-stream', filename },

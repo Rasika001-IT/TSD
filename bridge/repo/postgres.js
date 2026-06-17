@@ -172,5 +172,20 @@ export function createPostgresRepo(databaseUrl) {
       const { rows } = await pool.query('SELECT * FROM content_mapping WHERE canonical_id = $1', [canonicalId]);
       return rows.map(rowToMapping);
     },
+
+    // --- app_settings (runtime toggles) ------------------------------------
+    async getSetting(key, fallback = null) {
+      const { rows } = await pool.query('SELECT value FROM app_settings WHERE key = $1', [key]);
+      return rows.length ? rows[0].value : fallback;
+    },
+
+    async setSetting(key, value) {
+      await pool.query(
+        `INSERT INTO app_settings (key, value, updated_at) VALUES ($1, $2, now())
+         ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`,
+        [key, JSON.stringify(value)]
+      );
+      return value;
+    },
   };
 }

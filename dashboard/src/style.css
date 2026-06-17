@@ -46,5 +46,34 @@ body { margin: 0; font-family: system-ui, sans-serif; background: #f4f4f2; color
 .job-wire .job { display: flex; gap: 0.5rem; padding: 0.25rem 0; border-bottom: 1px solid #eee; }
 .job-wire .job .error { color: #b3261e; }
 
-.toast { position: fixed; bottom: 1rem; right: 1rem; padding: 0.75rem 1rem; background: #111; color: #fff; border-radius: 4px; }
+.toast { position: fixed; bottom: 1rem; right: 1rem; padding: 0.75rem 1rem; background: #111; color: #fff; border-radius: 4px; max-width: 40ch; }
 .toast.err { background: #b3261e; }
+
+/* Masthead view tabs + scheduler toggle */
+.masthead .views { display: flex; gap: 0.25rem; margin-left: 1rem; }
+.masthead .views button { background: transparent; color: #bbb; border: 1px solid #444; padding: 0.25rem 0.6rem; cursor: pointer; border-radius: 3px; }
+.masthead .views button.active { background: #fff; color: #111; }
+.sched-toggle { display: inline-flex; align-items: center; gap: 0.4rem; border: none; padding: 0.35rem 0.7rem; border-radius: 999px; cursor: pointer; font-size: 0.8rem; margin-right: 0.75rem; }
+.sched-toggle .dot { width: 8px; height: 8px; border-radius: 50%; background: #fff; }
+.sched-toggle.on { background: #1a7f37; color: #fff; }
+.sched-toggle.off { background: #555; color: #ddd; }
+.sched-toggle:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* Featured image drop */
+.image-drop { margin-top: 0.75rem; border-top: 1px solid #eee; padding-top: 0.5rem; }
+.image-drop h3 { font-size: 0.85rem; margin: 0 0 0.4rem; }
+.image-drop .current-image img { max-width: 100%; border-radius: 4px; display: block; }
+.image-drop .current-image .alt { display: block; font-size: 0.72rem; color: #666; margin: 0.25rem 0; }
+.image-drop .dropzone { border: 2px dashed #bbb; border-radius: 6px; padding: 1rem; text-align: center; font-size: 0.8rem; color: #666; cursor: pointer; background: #fafafa; }
+.image-drop .dropzone.uploading { color: #1a3a7f; border-color: #1a3a7f; }
+
+/* Published list */
+.published-view { background: #fff; min-height: calc(100vh - 52px); }
+.published-list { padding: 1.25rem; max-width: 820px; }
+.published-list ul { list-style: none; padding: 0; margin: 0; }
+.published-list li { padding: 0.75rem 0; border-bottom: 1px solid #eee; }
+.published-list .title { font-weight: 600; }
+.published-list .meta { font-size: 0.78rem; color: #777; display: flex; gap: 0.75rem; margin: 0.15rem 0; }
+.published-list .links a { margin-right: 0.75rem; color: #1a3a7f; text-decoration: none; font-size: 0.85rem; }
+.published-list .pending { color: #b35900; font-size: 0.8rem; }
+.published-list .empty { color: #999; }

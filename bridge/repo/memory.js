@@ -10,6 +10,7 @@ export function createMemoryRepo() {
   const canonicalById = new Map();
   const jobs = new Map(); // jobId -> job
   const mappings = new Map(); // `${canonicalId}::${target}` -> mapping
+  const settings = new Map(); // key -> value (runtime toggles)
 
   const mappingKey = (canonicalId, target) => `${canonicalId}::${target}`;
 
@@ -115,6 +116,16 @@ export function createMemoryRepo() {
       return [...mappings.values()]
         .filter((m) => m.canonicalId === canonicalId)
         .map((m) => ({ ...m }));
+    },
+
+    // --- app_settings (runtime toggles) ------------------------------------
+    async getSetting(key, fallback = null) {
+      return settings.has(key) ? settings.get(key) : fallback;
+    },
+
+    async setSetting(key, value) {
+      settings.set(key, value);
+      return value;
     },
   };
 }

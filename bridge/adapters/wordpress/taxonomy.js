@@ -56,13 +56,28 @@ export function createTaxonomyResolver({ request, taxonomyRestBase = {} }) {
    */
   async function resolveAll(taxonomies = []) {
     const byRestBase = new Map();
+    const skipped = [];
     for (const taxon of taxonomies) {
       const restBase = restBaseFor(taxon.type);
       if (!restBase) continue; // unknown type: skip rather than fail the whole post
-      const id = await resolveOne(restBase, taxon);
-      const list = byRestBase.get(restBase) ?? [];
-      list.push(id);
-      byRestBase.set(restBase, list);
+      try {
+        const id = await resolveOne(restBase, taxon);
+        const list = byRestBase.get(restBase) ?? [];
+        list.push(id);
+        byRestBase.set(restBase, list);
+      } catch (err) {
+        // A custom taxonomy that isn't registered on this site returns 404 — a
+        // missing optional taxonomy must not block the whole post. Skip the term
+        // (core categories/tags still apply) and record it for visibility.
+        if (err.status === 404) {
+          skipped.push(`${taxon.type}:${taxon.slug} (taxonomy "${restBase}" not registered)`);
+          continue;
+        }
+        throw err; // genuine errors (auth, 5xx) still surface as retryable
+      }
+    }
+    if (skipped.length) {
+      console.warn(`[wordpress] skipped unregistered taxonomies: ${skipped.join(', ')}`);
     }
     return Object.fromEntries(byRestBase);
   }

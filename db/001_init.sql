@@ -66,3 +66,13 @@ CREATE TABLE IF NOT EXISTS content_mapping (
 
 CREATE INDEX IF NOT EXISTS idx_mapping_remote
   ON content_mapping (target, remote_id);
+
+-- ---------------------------------------------------------------------------
+-- app_settings: small key/value store for runtime toggles (e.g. whether the
+-- generation scheduler is enabled). JSONB value so it can hold flags/objects.
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS app_settings (
+  key        TEXT PRIMARY KEY,
+  value      JSONB NOT NULL,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);

@@ -32,4 +32,10 @@ export const api = {
     request('/generate', { method: 'POST', body: JSON.stringify({ stream, category, topic }) }),
   regenerate: (id, topic = null) =>
     request(`/items/${id}/regenerate`, { method: 'POST', body: JSON.stringify({ topic }) }),
+  getSettings: () => request('/settings'),
+  setScheduler: (enabled) =>
+    request('/settings/scheduler', { method: 'POST', body: JSON.stringify({ enabled }) }),
+  listPublished: () => request('/published'),
+  uploadImage: (id, base64, mimeType, filename) =>
+    request(`/items/${id}/image`, { method: 'POST', body: JSON.stringify({ base64, mimeType, filename }) }),
 };

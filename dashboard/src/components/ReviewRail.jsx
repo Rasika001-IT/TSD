@@ -3,8 +3,9 @@
 // on the selected item; approving is the only path that hands control to the
 // bridge (see dashboard/server.js).
 import React, { useState } from 'react';
+import { ImageDrop } from './ImageDrop.jsx';
 
-export function ReviewRail({ content, mappings, busy, onDecision, onRegenerate, children }) {
+export function ReviewRail({ content, mappings, busy, onDecision, onRegenerate, onImageUploaded, flash, children }) {
   const [notes, setNotes] = useState('');
 
   if (!content) return <aside className="review-rail empty" />;
@@ -30,6 +31,14 @@ export function ReviewRail({ content, mappings, busy, onDecision, onRegenerate, 
           ))}
         </ul>
       )}
+
+      <ImageDrop
+        itemId={content.id}
+        featuredImage={content.featuredImage}
+        busy={busy}
+        onUploaded={onImageUploaded}
+        flash={flash}
+      />
 
       <textarea
         placeholder="Notes (optional for approve, recommended for changes/reject)"
