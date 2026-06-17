@@ -28,4 +28,8 @@ export const api = {
       body: JSON.stringify({ decision, notes, publishNow }),
     }),
   listJobs: (status = null) => request(`/jobs${status ? `?status=${encodeURIComponent(status)}` : ''}`),
+  generate: (stream, category, topic = null) =>
+    request('/generate', { method: 'POST', body: JSON.stringify({ stream, category, topic }) }),
+  regenerate: (id, topic = null) =>
+    request(`/items/${id}/regenerate`, { method: 'POST', body: JSON.stringify({ topic }) }),
 };

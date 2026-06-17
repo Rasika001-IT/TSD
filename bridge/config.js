@@ -15,6 +15,12 @@ export const config = {
     taxonomyRestBase: {}, // override per-deployment if custom taxonomies use other REST bases
   },
 
+  // Content-generation agent (Claude). Used by /agent/generate.js.
+  anthropic: {
+    enabled: Boolean(process.env.ANTHROPIC_API_KEY),
+    apiKey: process.env.ANTHROPIC_API_KEY ?? null,
+  },
+
   pollIntervalMs: Number(process.env.BRIDGE_POLL_INTERVAL_MS ?? 15000),
   batchSize: Number(process.env.BRIDGE_BATCH_SIZE ?? 10),
   defaultMaxAttempts: Number(process.env.BRIDGE_DEFAULT_MAX_ATTEMPTS ?? 5),

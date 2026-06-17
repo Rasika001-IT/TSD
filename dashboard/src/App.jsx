@@ -8,6 +8,7 @@ import { Queue } from './components/Queue.jsx';
 import { Reader } from './components/Reader.jsx';
 import { ReviewRail } from './components/ReviewRail.jsx';
 import { JobWire } from './components/JobWire.jsx';
+import { GeneratePanel } from './components/GeneratePanel.jsx';
 
 export default function App() {
   const [items, setItems] = useState([]);
@@ -78,6 +79,19 @@ export default function App() {
     }
   }, [activeId, items, flash, loadQueue]);
 
+  const onRegenerate = useCallback(async () => {
+    if (!activeId) return;
+    setBusy(true);
+    try {
+      await api.regenerate(activeId);
+      flash('Regenerating — the redo will replace this draft in the queue shortly.');
+    } catch (e) {
+      flash(e.message, true);
+    } finally {
+      setBusy(false);
+    }
+  }, [activeId, flash]);
+
   const content = detail?.content ?? null;
 
   return (
@@ -90,13 +104,17 @@ export default function App() {
       </header>
 
       <div className="desk">
-        <Queue items={items} activeId={activeId} onSelect={setActiveId} />
+        <div className="left-rail">
+          <GeneratePanel onStarted={loadQueue} flash={flash} />
+          <Queue items={items} activeId={activeId} onSelect={setActiveId} />
+        </div>
         <Reader content={content} />
         <ReviewRail
           content={content}
           mappings={detail?.mappings ?? []}
           busy={busy}
           onDecision={onDecision}
+          onRegenerate={onRegenerate}
         >
           <JobWire jobs={detail?.jobs ?? []} />
         </ReviewRail>

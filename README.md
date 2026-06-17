@@ -89,6 +89,46 @@ before it can reach an adapter.
 - **Provenance** — authorship/model/review recorded on every item for the
   internal audit trail; never exposed to readers.
 
+## Content generation (Claude)
+
+The agent can draft news and blog posts in TSD house style and drop them into the
+review queue. It is **grounded on real sources** — it uses Claude's web search to
+research a current story, then writes only from what it verified. The human review
+gate still applies: every generated item defaults to `pending_review`.
+
+```bash
+# One-off draft on demand:
+npm run generate -- --stream news --category "Deals & M&A"
+npm run generate -- --stream blog --category "Leadership & Strategy" --topic "scaling teams"
+
+# Generate the whole day's editorial plan (wire this to cron in production):
+npm run generate -- --today
+```
+
+Set `ANTHROPIC_API_KEY` in `.env` first (use the project's dedicated Claude
+account). Without it, generation is disabled and the rest of the system still runs.
+
+**How it works (two phases, in `agent/generate.js`):**
+1. **Research** — `web_search` + `web_fetch` on; gathers verified facts and sources,
+   judges story prominence. No invented facts.
+2. **Write** — no tools, strict JSON schema → a canonical object. The piece is
+   written *only* from the phase-1 brief. Big/widely-covered stories escalate from
+   Sonnet to Opus; everything else uses Sonnet (cost control). No image generation.
+
+The editorial rhythm (which categories run which weekday, blog publish windows) is
+encoded in `agent/editorial-calendar.js`; the TSD structure/voice rules in
+`agent/tsd-guidelines.js`; and a post-generation spec check
+(`agent/content-spec.js`) attaches advisory notes for the reviewer — it never
+auto-rejects, because the human is the gate.
+
+**In the dashboard:** the "Generate a draft" panel triggers a draft on demand, and
+each AI draft has a **Redo (regenerate)** button to rewrite it in place.
+
+> **Factual accuracy is a layered defense, not a guarantee.** Grounding on real
+> sources sharply reduces hallucination, but an LLM can still err — the human
+> reviewer remains the actual guarantee that no unverified claim goes live. The
+> agent never marks a fact-check as passed; only a human can.
+
 ## How to add a new CMS adapter
 
 Adding or swapping a CMS touches **only `/bridge/adapters/*` plus one new

@@ -11,6 +11,10 @@ import {
 } from '../shared/index.js';
 import { getRepo } from '../bridge/repo/index.js';
 import { enqueueForTargets } from '../bridge/api.js';
+import { config } from '../bridge/config.js';
+import { generateAndQueue } from '../agent/generate-cli.js';
+
+const STREAM_FOR_TYPE = { blog: 'blog' }; // everything else is a 'news' stream
 
 const app = express();
 app.use(express.json({ limit: '5mb' }));
@@ -117,6 +121,47 @@ app.get('/api/jobs', async (req, res) => {
   const repo = await getRepo();
   const jobs = await repo.listJobs({ status: req.query.status ?? null });
   res.json({ jobs });
+});
+
+// --- Content generation (Claude) -------------------------------------------
+// Generation can take minutes (web research), so these endpoints kick the work
+// off in the background and return immediately. The new/updated item appears in
+// the pending_review queue when it finishes — the dashboard already polls.
+
+function startGeneration(spec, label) {
+  generateAndQueue(spec)
+    .then((r) => console.log(`[generate] queued "${r.content.title}" (${label})`))
+    .catch((err) => console.error(`[generate] failed (${label}): ${err.message}`));
+}
+
+// On-demand generation: { stream, category, topic? }
+app.post('/api/generate', (req, res) => {
+  if (!config.anthropic.enabled) {
+    return res.status(503).json({ error: 'Generation disabled: set ANTHROPIC_API_KEY on the API server.' });
+  }
+  const { stream = 'news', category, topic = null } = req.body ?? {};
+  if (!category) return res.status(400).json({ error: 'category is required' });
+  const sourceId = `tsd-${stream}-manual-${Date.now()}`;
+  startGeneration({ stream: stream === 'blog' ? 'blog' : 'news', type: stream, category, topicHint: topic, sourceId }, 'manual');
+  res.status(202).json({ accepted: true, sourceId });
+});
+
+// Regenerate an existing item in place ("redo" — reuses sourceId so the record
+// is updated, not duplicated). Useful when an editor dislikes the draft.
+app.post('/api/items/:id/regenerate', async (req, res) => {
+  if (!config.anthropic.enabled) {
+    return res.status(503).json({ error: 'Generation disabled: set ANTHROPIC_API_KEY on the API server.' });
+  }
+  const repo = await getRepo();
+  const content = await repo.getCanonicalById(req.params.id);
+  if (!content) return res.status(404).json({ error: 'not found' });
+  const stream = STREAM_FOR_TYPE[content.type] ?? 'news';
+  const category = (content.taxonomies ?? []).find((t) => t.type === 'category')?.name;
+  startGeneration(
+    { stream, type: stream, category, topicHint: req.body?.topic ?? null, sourceId: content.sourceId, scheduledFor: content.scheduledFor },
+    `regenerate ${content.id}`
+  );
+  res.status(202).json({ accepted: true });
 });
 
 const PORT = process.env.DASH_PORT ?? 4000;

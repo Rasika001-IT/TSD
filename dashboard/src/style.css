@@ -8,8 +8,23 @@ body { margin: 0; font-family: system-ui, sans-serif; background: #f4f4f2; color
 .masthead .spacer { flex: 1; }
 .masthead .clock { font-family: monospace; opacity: 0.7; }
 
-.desk { display: grid; grid-template-columns: 260px 1fr 320px; gap: 1px; background: #ddd; min-height: calc(100vh - 52px); }
-.queue, .reader, .review-rail { background: #fff; padding: 1rem; overflow-y: auto; }
+.desk { display: grid; grid-template-columns: 280px 1fr 340px; gap: 1px; background: #ddd; min-height: calc(100vh - 52px); }
+.left-rail, .reader, .review-rail { background: #fff; overflow-y: auto; }
+.left-rail { display: flex; flex-direction: column; }
+.queue, .reader, .review-rail { padding: 1rem; }
+.queue { overflow-y: auto; }
+
+.generate-panel { padding: 1rem; border-bottom: 2px solid #eee; background: #fafafa; }
+.generate-panel h2 { font-size: 0.95rem; margin: 0 0 0.5rem; }
+.generate-panel .row { display: flex; gap: 0.4rem; margin-bottom: 0.4rem; }
+.generate-panel select, .generate-panel input { width: 100%; padding: 0.35rem; box-sizing: border-box; }
+.generate-panel input { margin-bottom: 0.4rem; }
+.generate-panel button { width: 100%; padding: 0.5rem; background: #1a3a7f; color: #fff; border: none; cursor: pointer; }
+.generate-panel button:disabled { opacity: 0.6; cursor: default; }
+
+.review-rail .redo { width: 100%; margin-top: 0.5rem; padding: 0.5rem; background: #444; color: #fff; border: none; cursor: pointer; }
+.review-rail .notes { margin-top: 0.75rem; font-size: 0.8rem; }
+.review-rail .notes pre { white-space: pre-wrap; background: #f6f6f4; padding: 0.5rem; }
 
 .queue ul { list-style: none; margin: 0; padding: 0; }
 .queue button { display: block; width: 100%; text-align: left; padding: 0.5rem; border: none; background: none; cursor: pointer; }

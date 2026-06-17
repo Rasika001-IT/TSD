@@ -4,7 +4,7 @@
 // bridge (see dashboard/server.js).
 import React, { useState } from 'react';
 
-export function ReviewRail({ content, mappings, busy, onDecision, children }) {
+export function ReviewRail({ content, mappings, busy, onDecision, onRegenerate, children }) {
   const [notes, setNotes] = useState('');
 
   if (!content) return <aside className="review-rail empty" />;
@@ -43,6 +43,19 @@ export function ReviewRail({ content, mappings, busy, onDecision, children }) {
         <button disabled={busy} className="changes" onClick={() => decide('changes_requested')}>Request changes</button>
         <button disabled={busy} className="reject" onClick={() => decide('rejected')}>Reject</button>
       </div>
+
+      {content.provenance?.authorship !== 'human' && onRegenerate && (
+        <button className="redo" disabled={busy} onClick={onRegenerate} title="Have the agent rewrite this draft">
+          ↻ Redo (regenerate)
+        </button>
+      )}
+
+      {content.editorial?.editorialNotes && (
+        <details className="notes">
+          <summary>Editorial notes</summary>
+          <pre>{content.editorial.editorialNotes}</pre>
+        </details>
+      )}
 
       {children}
     </aside>
