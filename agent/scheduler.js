@@ -10,7 +10,7 @@
 // it checks the repository before spending an API call.
 
 import { fileURLToPath } from 'node:url';
-import { planForDate, sourceIdFor } from './editorial-calendar.js';
+import { planForDate, sourceIdFor, DEFAULT_PUBLISH_WINDOWS } from './editorial-calendar.js';
 import { generateAndQueue } from './generate-cli.js';
 import { getRepo } from '../bridge/repo/index.js';
 import { config } from '../bridge/config.js';
@@ -33,7 +33,9 @@ export async function tickScheduler(now = new Date(), deps = {}) {
   const enabled = await repo.getSetting(SCHEDULER_FLAG, false);
   if (!enabled) return [];
 
-  const { items } = planForDate(now);
+  const windows = await repo.getSetting('publish_windows', DEFAULT_PUBLISH_WINDOWS);
+  const enabledTimes = windows.filter((w) => w.enabled).map((w) => w.time);
+  const { items } = planForDate(now, { publishWindows: enabledTimes });
   const started = [];
 
   for (const item of items) {

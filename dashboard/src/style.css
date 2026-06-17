@@ -14,6 +14,19 @@ body { margin: 0; font-family: system-ui, sans-serif; background: #f4f4f2; color
 .queue, .reader, .review-rail { padding: 1rem; }
 .queue { overflow-y: auto; }
 
+/* Controls: model dropdown + publish-window calendar */
+.controls-panel { padding: 1rem; border-bottom: 2px solid #eee; background: #f0f3f8; }
+.controls-panel .model-select { display: block; font-size: 0.8rem; margin-bottom: 0.75rem; }
+.controls-panel .model-select span { display: block; font-weight: 600; margin-bottom: 0.25rem; }
+.controls-panel .model-select select { width: 100%; padding: 0.35rem; box-sizing: border-box; }
+.controls-panel .windows-label { font-size: 0.8rem; font-weight: 600; display: block; margin-bottom: 0.4rem; }
+.controls-panel .window-grid { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+.controls-panel .window-chip { border: 1px solid #bbb; background: #fff; color: #555; padding: 0.3rem 0.6rem; border-radius: 999px; cursor: pointer; font-size: 0.78rem; }
+.controls-panel .window-chip.on { background: #1a7f37; color: #fff; border-color: #1a7f37; }
+.controls-panel .window-chip:disabled { opacity: 0.6; cursor: default; }
+.controls-panel .hint { font-size: 0.72rem; color: #777; margin: 0.5rem 0 0; }
+
+.generate-panel .gen-hint { font-size: 0.72rem; color: #777; margin: 0 0 0.5rem; }
 .generate-panel { padding: 1rem; border-bottom: 2px solid #eee; background: #fafafa; }
 .generate-panel h2 { font-size: 0.95rem; margin: 0 0 0.5rem; }
 .generate-panel .row { display: flex; gap: 0.4rem; margin-bottom: 0.4rem; }

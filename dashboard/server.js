@@ -18,6 +18,9 @@ import { config } from '../bridge/config.js';
 import { generateAndQueue } from '../agent/generate-cli.js';
 import { generateAltText } from '../agent/alt-text.js';
 import { SCHEDULER_FLAG } from '../agent/scheduler.js';
+import { DEFAULT_PUBLISH_WINDOWS } from '../agent/editorial-calendar.js';
+
+const MODEL_OPTIONS = ['auto', 'claude-sonnet-4-6', 'claude-opus-4-8', 'claude-haiku-4-5'];
 
 const STREAM_FOR_TYPE = { blog: 'blog' }; // everything else is a 'news' stream
 
@@ -184,7 +187,15 @@ app.post('/api/items/:id/regenerate', async (req, res) => {
 app.get('/api/settings', async (req, res) => {
   const repo = await getRepo();
   const schedulerEnabled = await repo.getSetting(SCHEDULER_FLAG, false);
-  res.json({ schedulerEnabled: !!schedulerEnabled, generationAvailable: config.anthropic.enabled });
+  const publishWindows = await repo.getSetting('publish_windows', DEFAULT_PUBLISH_WINDOWS);
+  const modelOverride = await repo.getSetting('model_override', 'auto');
+  res.json({
+    schedulerEnabled: !!schedulerEnabled,
+    generationAvailable: config.anthropic.enabled,
+    publishWindows,
+    modelOverride: modelOverride ?? 'auto',
+    modelOptions: MODEL_OPTIONS,
+  });
 });
 
 app.post('/api/settings/scheduler', async (req, res) => {
@@ -192,6 +203,28 @@ app.post('/api/settings/scheduler', async (req, res) => {
   const enabled = !!(req.body?.enabled);
   await repo.setSetting(SCHEDULER_FLAG, enabled);
   res.json({ schedulerEnabled: enabled });
+});
+
+// Editor-managed publish windows (the calendar toggles).
+app.post('/api/settings/windows', async (req, res) => {
+  const repo = await getRepo();
+  const windows = Array.isArray(req.body?.windows) ? req.body.windows : null;
+  if (!windows) return res.status(400).json({ error: 'windows array required' });
+  // Keep only the fields we own; coerce enabled to boolean.
+  const clean = windows.map((w) => ({ id: String(w.id), label: String(w.label), time: String(w.time), enabled: !!w.enabled }));
+  await repo.setSetting('publish_windows', clean);
+  res.json({ publishWindows: clean });
+});
+
+// Claude model override ('auto' = the built-in Sonnet/Opus-by-prominence logic).
+app.post('/api/settings/model', async (req, res) => {
+  const repo = await getRepo();
+  const model = req.body?.model;
+  if (!MODEL_OPTIONS.includes(model)) {
+    return res.status(400).json({ error: `model must be one of: ${MODEL_OPTIONS.join(', ')}` });
+  }
+  await repo.setSetting('model_override', model === 'auto' ? null : model);
+  res.json({ modelOverride: model });
 });
 
 // --- Published posts (post-publication review) -----------------------------

@@ -12,6 +12,7 @@ import { JobWire } from './components/JobWire.jsx';
 import { GeneratePanel } from './components/GeneratePanel.jsx';
 import { SchedulerToggle } from './components/SchedulerToggle.jsx';
 import { PublishedList } from './components/PublishedList.jsx';
+import { ControlsPanel } from './components/ControlsPanel.jsx';
 
 export default function App() {
   const [view, setView] = useState('review'); // 'review' | 'published'
@@ -24,6 +25,9 @@ export default function App() {
   const [clock, setClock] = useState(new Date());
   const [schedulerEnabled, setSchedulerEnabled] = useState(false);
   const [generationAvailable, setGenerationAvailable] = useState(false);
+  const [model, setModel] = useState('auto');
+  const [modelOptions, setModelOptions] = useState([]);
+  const [windows, setWindows] = useState([]);
 
   const flash = useCallback((msg, isErr = false) => {
     setToast({ msg, isErr });
@@ -53,7 +57,13 @@ export default function App() {
   useEffect(() => { loadQueue(); }, [loadQueue]);
   useEffect(() => {
     api.getSettings()
-      .then((s) => { setSchedulerEnabled(s.schedulerEnabled); setGenerationAvailable(s.generationAvailable); })
+      .then((s) => {
+        setSchedulerEnabled(s.schedulerEnabled);
+        setGenerationAvailable(s.generationAvailable);
+        setModel(s.modelOverride ?? 'auto');
+        setModelOptions(s.modelOptions ?? []);
+        setWindows(s.publishWindows ?? []);
+      })
       .catch(() => {});
   }, []);
   useEffect(() => {
@@ -123,6 +133,14 @@ export default function App() {
       {view === 'review' ? (
         <div className="desk">
           <div className="left-rail">
+            <ControlsPanel
+              model={model}
+              modelOptions={modelOptions}
+              windows={windows}
+              onModel={setModel}
+              onWindows={setWindows}
+              flash={flash}
+            />
             <GeneratePanel onStarted={loadQueue} flash={flash} />
             <Queue items={items} activeId={activeId} onSelect={setActiveId} />
           </div>

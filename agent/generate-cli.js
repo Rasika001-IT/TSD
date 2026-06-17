@@ -18,6 +18,7 @@ import { generate } from './generate.js';
 import { checkAgainstSpec } from './content-spec.js';
 import { planForDate } from './editorial-calendar.js';
 import { publish } from '../bridge/index.js';
+import { getRepo } from '../bridge/repo/index.js';
 
 function parseArgs(argv) {
   const args = {};
@@ -31,7 +32,10 @@ function parseArgs(argv) {
 
 /** Generate one spec, attach spec warnings, persist to the review queue. */
 export async function generateAndQueue(spec, deps = {}) {
-  const { content, prominence, brief } = await generate(spec, deps);
+  // Honor a dashboard-set model override (spec wins if explicitly provided).
+  const repo = await getRepo();
+  const modelOverride = spec.modelOverride ?? (await repo.getSetting('model_override', null));
+  const { content, prominence, brief } = await generate({ ...spec, modelOverride }, deps);
   const warnings = checkAgainstSpec(content, spec.stream);
   if (warnings.length) {
     const note = 'Spec check:\n' + warnings.map((w) => `- ${w}`).join('\n');

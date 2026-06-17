@@ -35,6 +35,10 @@ export const api = {
   getSettings: () => request('/settings'),
   setScheduler: (enabled) =>
     request('/settings/scheduler', { method: 'POST', body: JSON.stringify({ enabled }) }),
+  setWindows: (windows) =>
+    request('/settings/windows', { method: 'POST', body: JSON.stringify({ windows }) }),
+  setModel: (model) =>
+    request('/settings/model', { method: 'POST', body: JSON.stringify({ model }) }),
   listPublished: () => request('/published'),
   uploadImage: (id, base64, mimeType, filename) =>
     request(`/items/${id}/image`, { method: 'POST', body: JSON.stringify({ base64, mimeType, filename }) }),

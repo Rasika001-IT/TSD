@@ -34,6 +34,12 @@ const MODELS = Object.freeze({
   major: 'claude-opus-4-8',      // escalation for big/widely-covered stories
 });
 
+// Adaptive thinking is supported on the Sonnet 4.6 / Opus 4.x families but not
+// Haiku — only attach it where valid so a model override can't 400.
+const supportsThinking = (model) => /sonnet-4-6|opus-4-/.test(model);
+const thinkingFor = (model) => (supportsThinking(model) ? { thinking: { type: 'adaptive' } } : {});
+const normalizeOverride = (m) => (m && m !== 'auto' ? m : null);
+
 const WEB_TOOLS = [
   { type: 'web_search_20260209', name: 'web_search' },
   { type: 'web_fetch_20260209', name: 'web_fetch' },
@@ -73,14 +79,15 @@ function researchPrompt({ stream, category, topicHint }) {
 }
 
 /** Run the research phase. Handles the server-side-tool pause_turn loop. */
-async function research(client, { stream, category, topicHint }, maxContinuations = 6) {
+async function research(client, { stream, category, topicHint, modelOverride }, maxContinuations = 6) {
+  const model = normalizeOverride(modelOverride) || MODELS.standard;
   const messages = [{ role: 'user', content: researchPrompt({ stream, category, topicHint }) }];
   let response;
   for (let i = 0; i <= maxContinuations; i++) {
     response = await client.messages.create({
-      model: MODELS.standard,
+      model,
       max_tokens: 16000,
-      thinking: { type: 'adaptive' },
+      ...thinkingFor(model),
       tools: WEB_TOOLS,
       messages,
     });
@@ -193,13 +200,13 @@ export function blocksToProseMirror(blocks = []) {
   return { type: 'doc', content };
 }
 
-/** Run the write phase with structured output, on the model chosen by prominence. */
-async function write(client, { stream, brief, prominence }) {
-  const model = prominence === 'major' ? MODELS.major : MODELS.standard;
+/** Run the write phase with structured output. Model = override, else by prominence. */
+async function write(client, { stream, brief, prominence, modelOverride }) {
+  const model = normalizeOverride(modelOverride) || (prominence === 'major' ? MODELS.major : MODELS.standard);
   const response = await client.messages.create({
     model,
     max_tokens: stream === 'blog' ? 16000 : 8000,
-    thinking: { type: 'adaptive' },
+    ...thinkingFor(model),
     system: buildStyleGuide(stream),
     output_config: { format: { type: 'json_schema', schema: outputSchema(stream) } },
     messages: [{ role: 'user', content: writePrompt({ stream, brief }) }],
@@ -266,8 +273,9 @@ export async function generate(spec, deps = {}) {
     throw new Error('generate: ANTHROPIC_API_KEY is not set (and no client injected).');
   }
   const client = deps.client ?? (await defaultClient());
-  const { brief, prominence } = await research(client, spec);
-  const { draft, model } = await write(client, { stream: spec.stream, brief, prominence });
+  const { modelOverride } = spec;
+  const { brief, prominence } = await research(client, { ...spec, modelOverride });
+  const { draft, model } = await write(client, { stream: spec.stream, brief, prominence, modelOverride });
   const content = draftToCanonical(draft, {
     stream: spec.stream,
     model,

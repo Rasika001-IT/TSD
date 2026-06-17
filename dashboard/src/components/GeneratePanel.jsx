@@ -45,7 +45,8 @@ export function GeneratePanel({ onStarted, flash }) {
 
   return (
     <div className="generate-panel">
-      <h2>Generate a draft</h2>
+      <h2>Generate now (override)</h2>
+      <p className="gen-hint">Draft a post immediately — no waiting for a scheduled window.</p>
       <div className="row">
         <select value={stream} onChange={(e) => onStream(e.target.value)} disabled={busy}>
           <option value="news">News</option>

@@ -28,8 +28,17 @@ const BLOG_PLAN = {
 // Publish windows (ET wall-clock), from "Publishing Times".
 // News: freshness wins — publish ASAP (no fixed slot); blogs hit the 9am ET window.
 export const PUBLISH_TIMES = Object.freeze({
-  blog: { hour: 9, minute: 0 },   // 9:00 AM ET = 2:00 PM UK
+  blog: { hour: 9, minute: 0 },   // 9:00 AM ET = 2:00 PM UK (default)
 });
+
+// Editor-configurable publish windows (ET wall-clock). The dashboard toggles
+// these on/off; the blog is scheduled to the earliest ENABLED window. Stored in
+// app_settings under "publish_windows"; this is the default seed.
+export const DEFAULT_PUBLISH_WINDOWS = Object.freeze([
+  { id: 'w-0900', label: '9:00 AM ET', time: '09:00', enabled: true },
+  { id: 'w-1400', label: '2:00 PM ET', time: '14:00', enabled: false },
+  { id: 'w-1800', label: '6:00 PM ET', time: '18:00', enabled: false },
+]);
 
 // News publishes ASAP on approval; the agent drafts it early in the weekday
 // morning so editors have it before the workday. Slots are staggered to spread
@@ -73,7 +82,11 @@ export function etWallClockToUtc(date, hour, minute) {
  * @param {Date} [date] defaults to now
  * @returns {{ weekday: number, isWeekday: boolean, items: object[] }}
  */
-export function planForDate(date = new Date()) {
+export function planForDate(date = new Date(), opts = {}) {
+  // Enabled publish windows as "HH:MM" ET strings; blog uses the earliest.
+  const windows = (opts.publishWindows && opts.publishWindows.length)
+    ? [...opts.publishWindows].sort()
+    : ['09:00'];
   const weekday = date.getUTCDay(); // 0=Sun..6=Sat (ET vs UTC day rarely differs at gen time)
   const isWeekday = weekday >= 1 && weekday <= 5;
   const items = [];
@@ -99,7 +112,8 @@ export function planForDate(date = new Date()) {
 
   const blog = BLOG_PLAN[weekday];
   if (blog) {
-    const publishAt = etWallClockToUtc(date, PUBLISH_TIMES.blog.hour, PUBLISH_TIMES.blog.minute);
+    const [bh, bm] = windows[0].split(':').map(Number);
+    const publishAt = etWallClockToUtc(date, bh, bm);
     items.push({
       stream: 'blog',
       type: 'blog',
