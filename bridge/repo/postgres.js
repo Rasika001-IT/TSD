@@ -44,7 +44,15 @@ function rowToMapping(row) {
 
 export function createPostgresRepo(databaseUrl) {
   if (!databaseUrl) throw new Error('createPostgresRepo: DATABASE_URL is required');
-  const pool = new Pool({ connectionString: databaseUrl });
+  // Managed Postgres (Supabase et al.) requires TLS. Local Postgres usually
+  // doesn't — detect localhost and skip SSL there. rejectUnauthorized:false
+  // accepts the provider's cert chain without bundling a CA (standard for
+  // Supabase's pooler with node-postgres).
+  const isLocal = /@(localhost|127\.0\.0\.1)[:/]/.test(databaseUrl);
+  const pool = new Pool({
+    connectionString: databaseUrl,
+    ssl: isLocal ? false : { rejectUnauthorized: false },
+  });
 
   return {
     // --- canonical_content -------------------------------------------------
