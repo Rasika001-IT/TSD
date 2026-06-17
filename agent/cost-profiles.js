@@ -11,21 +11,23 @@
 export const DEFAULT_COST_PROFILE = 'balanced';
 
 export const COST_PROFILES = Object.freeze({
+  // maxFetches caps full-page web_fetch (the big input-token sink); maxSearches
+  // caps web_search (cheap snippets). Fetching whole pages is what costs.
   balanced: {
     label: 'Balanced',
-    research: { model: 'claude-sonnet-4-6', effort: 'low', thinking: true, maxSearches: 4, webFetch: true },
+    research: { model: 'claude-sonnet-4-6', effort: 'low', thinking: true, maxSearches: 4, maxFetches: 1 },
     write: { model: 'claude-sonnet-4-6', effortNews: 'low', effortBlog: 'medium', thinking: false },
     promptCache: true,
   },
   'max-savings': {
     label: 'Max savings',
-    research: { model: 'claude-sonnet-4-6', effort: 'low', thinking: false, maxSearches: 2, webFetch: false },
+    research: { model: 'claude-sonnet-4-6', effort: 'low', thinking: false, maxSearches: 3, maxFetches: 0 },
     write: { model: 'claude-haiku-4-5', effortNews: 'low', effortBlog: 'low', thinking: false },
     promptCache: true,
   },
   'quality-first': {
     label: 'Quality-first',
-    research: { model: 'claude-sonnet-4-6', effort: 'medium', thinking: true, maxSearches: 6, webFetch: true },
+    research: { model: 'claude-sonnet-4-6', effort: 'medium', thinking: true, maxSearches: 6, maxFetches: 4 },
     write: { model: 'byProminence', effortNews: 'medium', effortBlog: 'high', thinking: false },
     promptCache: true,
   },

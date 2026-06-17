@@ -4,6 +4,9 @@
 // enqueues bridge jobs — handing control to the bridge. Auth is a placeholder.
 
 import express from 'express';
+import path from 'node:path';
+import fs from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import {
   ContentStatus,
   EditorialStage,
@@ -29,9 +32,15 @@ const app = express();
 app.use(express.json({ limit: '5mb' }));
 
 // --- Placeholder auth: a single shared header. Replace with real auth later. ---
+// In dev (DASH_TOKEN unset/'dev-token') the API is open for convenience. As soon
+// as a real DASH_TOKEN is configured (production), the header is REQUIRED and must
+// match — so a deployed dashboard isn't wide open. NOTE: this is still
+// placeholder-grade (the token ships in the client bundle); put real auth or an
+// IP/private-network restriction in front before exposing publicly.
 const DASH_TOKEN = process.env.DASH_TOKEN ?? 'dev-token';
+const DEV_OPEN = DASH_TOKEN === 'dev-token';
 app.use('/api', (req, res, next) => {
-  const token = req.header('x-dash-token') ?? DASH_TOKEN; // default-allow in dev
+  const token = req.header('x-dash-token') ?? (DEV_OPEN ? DASH_TOKEN : null);
   if (token !== DASH_TOKEN) return res.status(401).json({ error: 'unauthorized' });
   req.reviewerId = req.header('x-reviewer-id') ?? 'editor:unknown';
   next();
@@ -315,12 +324,25 @@ app.post('/api/items/:id/image', async (req, res) => {
   }
 });
 
-const PORT = process.env.DASH_PORT ?? 4000;
-export function startDashboardServer() {
-  return app.listen(PORT, () => console.log(`[dashboard] API on http://localhost:${PORT}`));
+// --- Serve the built React dashboard (production: one web service for both) --
+// In dev the Vite server hosts the UI and proxies /api here; in production the
+// built dist is served from this same origin, so the frontend's relative /api
+// calls just work.
+const distDir = path.join(path.dirname(fileURLToPath(import.meta.url)), 'dist');
+if (fs.existsSync(distDir)) {
+  app.use(express.static(distDir));
+  app.get('*', (req, res, next) => {
+    if (req.path.startsWith('/api')) return next();
+    res.sendFile(path.join(distDir, 'index.html'));
+  });
+  console.log('[dashboard] serving built UI from dist/');
 }
 
-import { fileURLToPath } from 'node:url';
+const PORT = process.env.PORT ?? process.env.DASH_PORT ?? 4000;
+export function startDashboardServer() {
+  return app.listen(PORT, () => console.log(`[dashboard] listening on http://localhost:${PORT}`));
+}
+
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   startDashboardServer();
 }

@@ -41,13 +41,16 @@ const MODELS = Object.freeze({
 // choice can't 400.
 const supportsTuning = (model) => /sonnet-4-6|opus-4-/.test(model);
 const thinkingFor = (model, on) => (on && supportsTuning(model) ? { thinking: { type: 'adaptive' } } : {});
-const effortFor = (model, effort) => (effort && supportsTuning(model) ? { effort } : {});
+// effort lives INSIDE output_config (not top-level); null when unsupported/unset.
+const effortValue = (model, effort) => (effort && supportsTuning(model) ? effort : null);
 const normalizeOverride = (m) => (m && m !== 'auto' ? m : null);
 
 // Build the web tool set for the research phase, bounded by the cost profile.
-function webTools({ maxSearches, webFetch }) {
+// Searches return cheap snippets; full-page fetches are the input-token sink, so
+// they get their own (usually tighter) cap and are dropped entirely at 0.
+function webTools({ maxSearches, maxFetches }) {
   const tools = [{ type: 'web_search_20260209', name: 'web_search', max_uses: maxSearches }];
-  if (webFetch) tools.push({ type: 'web_fetch_20260209', name: 'web_fetch', max_uses: maxSearches });
+  if (maxFetches > 0) tools.push({ type: 'web_fetch_20260209', name: 'web_fetch', max_uses: maxFetches });
   return tools;
 }
 
@@ -64,22 +67,28 @@ async function defaultClient() {
 
 function researchPrompt({ stream, category, topicHint }) {
   const what = stream === 'blog'
-    ? `an evergreen ${category} blog topic that is genuinely useful to senior business leaders`
-    : `a real, current ${category} news story from the last 24–48 hours`;
+    ? `one evergreen ${category} angle that is genuinely useful to senior US/UK business leaders`
+    : `one real, significant ${category} story from roughly the last 48 hours`;
   return [
-    `Research ${what}.`,
+    `Find ${what} and assemble a verification brief. Be efficient: run only as`,
+    'many web searches as you need (aim for 2–3), and open a source in full only',
+    'when a snippet is not enough. Prefer primary sources (filings, official',
+    'releases) and major business outlets.',
     topicHint ? `Topic direction: ${topicHint}.` : '',
     '',
-    'Use web search and web fetch to find and verify the facts. Prefer reputable',
-    'primary and major business-news sources. Then produce a tight brief:',
-    '- The angle (one sentence).',
-    '- The verified facts that matter, each with the source you got it from.',
-    '- Any direct quotes worth using, with exact attribution and source URL.',
-    '- The companies, people, and places involved.',
+    'Then output a TIGHT brief (aim for under ~250 words) with:',
+    '- ANGLE: one sentence on the story and why it matters to an executive reader.',
+    '- FACTS: only the verified, load-bearing facts — exact figures, dates, names,',
+    '  titles — each with the source it came from. Mark anything you could not',
+    '  confirm as "unverified" rather than asserting it.',
+    '- QUOTES: any genuinely useful direct quote, verbatim, with exact attribution',
+    '  and source URL (omit if none — never invent one).',
+    '- ENTITIES: the companies, people, and places involved.',
+    '- SOURCES: the URLs you actually used.',
     '',
-    'Do not write the article yet. Only assemble verified material.',
-    'End your reply with a final line exactly of the form:',
-    'PROMINENCE: major   (if this is a big story covered widely by major outlets)',
+    'Do not write the article. Assemble verified material only.',
+    'End with a final line exactly of the form:',
+    'PROMINENCE: major   (a big story widely covered by major outlets)',
     'PROMINENCE: standard   (otherwise)',
   ].filter(Boolean).join('\n');
 }
@@ -89,6 +98,7 @@ async function research(client, { stream, category, topicHint, profile }, maxCon
   const r = profile.research;
   const model = r.model;
   const messages = [{ role: 'user', content: researchPrompt({ stream, category, topicHint }) }];
+  const eff = effortValue(model, r.effort);
   const usages = [];
   let response;
   for (let i = 0; i <= maxContinuations; i++) {
@@ -96,8 +106,8 @@ async function research(client, { stream, category, topicHint, profile }, maxCon
       model,
       max_tokens: 16000,
       ...thinkingFor(model, r.thinking),
-      ...effortFor(model, r.effort),
-      tools: webTools({ maxSearches: r.maxSearches, webFetch: r.webFetch }),
+      ...(eff ? { output_config: { effort: eff } } : {}),
+      tools: webTools({ maxSearches: r.maxSearches, maxFetches: r.maxFetches }),
       messages,
     });
     if (response.usage) usages.push({ model, usage: response.usage });
@@ -163,15 +173,37 @@ function outputSchema(stream) {
 }
 
 function writePrompt({ stream, brief }) {
+  // Stream-specific spec targets — stated explicitly so the draft lands within
+  // TSD standards on the first pass (less reviewer rework, fewer regenerations).
+  const spec = stream === 'blog'
+    ? [
+        'TARGETS (TSD blog): headline compelling + keyword-led; seoTitle <=60 chars,',
+        'keyword first; metaDescription 150–160 chars (promise + keyword + benefit);',
+        'slug 3–6 words, lowercase-hyphenated, no stop words; dek 1–2 sentences;',
+        'body 1,500–2,500 words, an H2/H3 roughly every 200–300 words, skim-friendly,',
+        'bullet lists where they help; 2–3 sourced pull quotes only if available;',
+        'a key_takeaways block (~5 items); 5–8 tags; exactly one category.',
+      ]
+    : [
+        'TARGETS (TSD news): headline 8–12 words with the primary keyword in the',
+        'first 4; seoTitle <=60 chars; metaDescription 150–160 chars with a CTA verb;',
+        'slug 3–5 words, lowercase-hyphenated, no stop words; lede 30–40 words that',
+        'answers who/what/when with the keyword in the first 30; body 300–600 words,',
+        'inverted pyramid (most important first); an H2 roughly every 150–200 words;',
+        'one sourced pull quote only if a real quote exists; 3–5 tags; one category.',
+      ];
   return [
-    `Using ONLY the verified brief below, write a TSD ${stream} piece and return`,
-    'it as JSON matching the required schema. Do not introduce any fact that is',
-    'not supported by the brief. If the brief is thin, keep the piece shorter',
-    'rather than padding it with unverified claims.',
+    `Write a TSD ${stream} piece from the verified brief below and return JSON`,
+    'matching the required schema. Use ONLY facts supported by the brief — never',
+    'introduce a figure, quote, name, or date that is not in it. If the brief is',
+    'thin, write a shorter piece rather than padding with unverified claims.',
+    'Be concise and editorial — no filler, no meta-commentary.',
     '',
-    'Map the body into the `blocks` array (heading = an H2; paragraph = body copy;',
-    'bullet_list/ordered_list use `items`; quote = a sourced pull quote;',
-    stream === 'blog' ? 'key_takeaways = the end-of-post takeaways box, ~5 items in `items`).' : 'no key_takeaways block for news).',
+    ...spec,
+    '',
+    'Body → `blocks`: heading = an H2; paragraph = body copy; bullet_list/',
+    'ordered_list use `items`; quote = a sourced pull quote;',
+    stream === 'blog' ? 'key_takeaways = the end box (~5 items in `items`).' : '(no key_takeaways for news).',
     'Set namesIndividual to true if the piece names a specific living individual.',
     '',
     '--- VERIFIED BRIEF ---',
@@ -217,18 +249,19 @@ async function write(client, { stream, brief, prominence, modelOverride, profile
     ? (prominence === 'major' ? MODELS.major : MODELS.standard)
     : w.model;
   const model = normalizeOverride(modelOverride) || profileModel;
-  const effort = stream === 'blog' ? w.effortBlog : w.effortNews;
+  const eff = effortValue(model, stream === 'blog' ? w.effortBlog : w.effortNews);
   const guide = buildStyleGuide(stream);
   const system = profile.promptCache
     ? [{ type: 'text', text: guide, cache_control: { type: 'ephemeral' } }] // cache the frozen style guide
     : guide;
+  const output_config = { format: { type: 'json_schema', schema: outputSchema(stream) } };
+  if (eff) output_config.effort = eff;
   const response = await client.messages.create({
     model,
     max_tokens: stream === 'blog' ? 16000 : 8000,
     ...thinkingFor(model, w.thinking),
-    ...effortFor(model, effort),
     system,
-    output_config: { format: { type: 'json_schema', schema: outputSchema(stream) } },
+    output_config,
     messages: [{ role: 'user', content: writePrompt({ stream, brief }) }],
   });
   const block = (response.content ?? []).find((b) => b.type === 'text');

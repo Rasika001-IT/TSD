@@ -8,6 +8,9 @@
     "dashboard"
   ],
   "scripts": {
+    "start": "node --env-file-if-exists=.env dashboard/server.js",
+    "start:worker": "node --env-file-if-exists=.env worker.js",
+    "build": "npm --workspace dashboard run build",
     "bridge": "node --env-file-if-exists=.env bridge/index.js",
     "dashboard:api": "node --env-file-if-exists=.env dashboard/server.js",
     "dashboard": "npm --workspace dashboard run dev",
