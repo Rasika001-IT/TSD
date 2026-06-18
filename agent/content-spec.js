@@ -20,6 +20,13 @@ export const SPECS = Object.freeze({
     bodyWords: [1500, 2500],
     tags: [5, 8],
   },
+  rankings: {
+    seoTitleMaxChars: 60,
+    metaDescriptionChars: [150, 160],
+    slugWords: [3, 6],
+    bodyWords: [600, 2500], // a power list varies with entry count
+    tags: [5, 8],
+  },
 });
 
 const wordCount = (s) => (String(s ?? '').trim().match(/\S+/g) || []).length;

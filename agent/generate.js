@@ -55,7 +55,10 @@ function webTools({ maxSearches, maxFetches }) {
 }
 
 // ContentType the canonical model expects, by stream.
-const STREAM_TO_TYPE = { news: ContentType.NEWS, blog: ContentType.BLOG };
+const STREAM_TO_TYPE = { news: ContentType.NEWS, blog: ContentType.BLOG, rankings: ContentType.RANKING_LIST };
+
+// Streams that produce long-form bodies (bigger token budget, blog-level effort).
+const isLongForm = (stream) => stream === 'blog' || stream === 'rankings';
 
 /** Lazily construct the default Anthropic client (only when no client injected). */
 async function defaultClient() {
@@ -66,6 +69,28 @@ async function defaultClient() {
 // --- Phase 1: research ------------------------------------------------------
 
 function researchPrompt({ stream, category, topicHint }) {
+  if (stream === 'rankings') {
+    const theme = topicHint || `${category} power list`;
+    return [
+      `Assemble a research brief for a TSD editorial RANKING / power list: "${theme}".`,
+      'Identify the real, currently-notable individuals or companies that belong on',
+      'this list — aim for 12–20 candidates. Run as many web searches as you need',
+      '(aim for 3–5). Prefer primary and major-outlet sources from 2025–2026.',
+      '',
+      'Output a brief with:',
+      '- LIST FRAME: one sentence on what this list recognizes and the basis for it.',
+      '- CANDIDATES: a numbered list of entries. For EACH, give the exact full name,',
+      '  current title, company, and the specific recent (2025–2026) accomplishment',
+      '  that earns the spot — each tied to the source it came from. Mark anything',
+      '  you could not confirm as "unverified". NEVER invent a person or achievement;',
+      '  list only real, currently-identifiable people/companies.',
+      '- SOURCES: the URLs you actually used.',
+      '',
+      'Do not write the article. Assemble verified material only.',
+      'End with a final line exactly of the form:',
+      'PROMINENCE: standard',
+    ].join('\n');
+  }
   const what = stream === 'blog'
     ? `one evergreen ${category} angle that is genuinely useful to senior US/UK business leaders`
     : `one real, significant ${category} story from roughly the last 48 hours`;
@@ -175,7 +200,21 @@ function outputSchema(stream) {
 function writePrompt({ stream, brief }) {
   // Stream-specific spec targets — stated explicitly so the draft lands within
   // TSD standards on the first pass (less reviewer rework, fewer regenerations).
-  const spec = stream === 'blog'
+  const spec = stream === 'rankings'
+    ? [
+        'TARGETS (TSD ranking / power list): headline leads with the list (number +',
+        'theme + year), keyword-led; seoTitle <=60 chars, keyword first;',
+        'metaDescription 150–160 chars; slug 3–6 words, lowercase-hyphenated; dek 1–2',
+        'sentences; an 80–150 word intro stating what the list honors and the',
+        'selection basis; then ONE heading block per ranked entry of the form',
+        '"N. Full Name — Title, Company", each followed by a paragraph of 2–4',
+        'sentences grounded ONLY in verified recent accomplishments; deliver the',
+        'number of entries the headline promises; a short closing Methodology',
+        'paragraph; 5–8 tags; exactly one category. NEVER invent a person, title, or',
+        'achievement — if the brief lacks enough verified entries, write a shorter',
+        'list and say so in the intro.',
+      ]
+    : stream === 'blog'
     ? [
         'TARGETS (TSD blog): headline compelling + keyword-led; seoTitle <=60 chars,',
         'keyword first; metaDescription 150–160 chars (promise + keyword + benefit);',
@@ -203,7 +242,7 @@ function writePrompt({ stream, brief }) {
     '',
     'Body → `blocks`: heading = an H2; paragraph = body copy; bullet_list/',
     'ordered_list use `items`; quote = a sourced pull quote;',
-    stream === 'blog' ? 'key_takeaways = the end box (~5 items in `items`).' : '(no key_takeaways for news).',
+    stream === 'blog' ? 'key_takeaways = the end box (~5 items in `items`).' : '(omit key_takeaways).',
     'Set namesIndividual to true if the piece names a specific living individual.',
     '',
     '--- VERIFIED BRIEF ---',
@@ -249,7 +288,7 @@ async function write(client, { stream, brief, prominence, modelOverride, profile
     ? (prominence === 'major' ? MODELS.major : MODELS.standard)
     : w.model;
   const model = normalizeOverride(modelOverride) || profileModel;
-  const eff = effortValue(model, stream === 'blog' ? w.effortBlog : w.effortNews);
+  const eff = effortValue(model, isLongForm(stream) ? w.effortBlog : w.effortNews);
   const guide = buildStyleGuide(stream);
   const system = profile.promptCache
     ? [{ type: 'text', text: guide, cache_control: { type: 'ephemeral' } }] // cache the frozen style guide
@@ -258,7 +297,7 @@ async function write(client, { stream, brief, prominence, modelOverride, profile
   if (eff) output_config.effort = eff;
   const response = await client.messages.create({
     model,
-    max_tokens: stream === 'blog' ? 16000 : 8000,
+    max_tokens: isLongForm(stream) ? 16000 : 8000,
     ...thinkingFor(model, w.thinking),
     system,
     output_config,

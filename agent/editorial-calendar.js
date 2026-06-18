@@ -51,7 +51,7 @@ export const DEFAULT_EDITORIAL_SCHEDULE = Object.freeze([
   { id: 'daily-news', day: 'Daily', stream: 'news', label: 'News',
     description: 'Daily business news — publishes ASAP on approval', enabled: true, live: true },
   { id: 'tue-rankings', day: 'Tuesday', stream: 'rankings', label: 'Rankings & Power Lists',
-    description: 'Editorial recognition — rotates Industry Leaders / Emerging Voices / Regional / Themed', enabled: true, live: false },
+    description: 'Editorial recognition — generatable on demand; Tuesday auto-scheduling is next', enabled: true, live: false },
   { id: 'thu-industry-hub', day: 'Thursday', stream: 'industry-hub', label: 'Industry Hub Features',
     description: 'Vertical deep-dive from a rotating hub (Tech, Finance, Healthcare, …)', enabled: true, live: false },
   { id: 'sat-reports', day: 'Saturday', stream: 'reports', label: 'Reports & Research',

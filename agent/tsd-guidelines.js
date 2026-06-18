@@ -80,6 +80,32 @@ BLOG STRUCTURE (every long-form blog must hit these):
 - Category: exactly one primary category from the blog category list.
 `.trim();
 
+// Rankings / Power List structure (from "Rankings & Power Lists", Website
+// Segments). A ranked editorial recognition piece, not a news story.
+export const RANKINGS_STRUCTURE = `
+RANKINGS / POWER LIST STRUCTURE (every ranking piece must hit these):
+- Headline (H1): lead with the list (number + theme + year), keyword-led, e.g.
+  "Top 20 Fintech Leaders Transforming Money in 2026". The number in the title
+  is the number of entries you must deliver.
+- SEO title: <= 60 characters, keyword first.
+- Meta description: 150–160 characters: what the list recognizes + keyword.
+- URL slug: 3–6 words, lowercase, hyphenated, keyword-driven.
+- Dek: 1–2 sentences framing what the list recognizes and the basis for it.
+- Intro: 80–150 words — what the list honors, why it matters now, and a plain
+  statement of the selection basis (this is editorial judgment, not a poll).
+- Entries: one H2 per ranked entry in the form "N. Full Name — Title, Company"
+  (or "N. Company"), each followed by a 2–4 sentence rationale grounded ONLY in
+  real, recent (2025–2026), verifiable accomplishments. Rank in a deliberate
+  order. Deliver the number of entries the headline promises.
+- Methodology: a short closing note on how entries were chosen.
+- Tags: 5–8 (theme + sub-sector + named entities). Category: exactly one from the
+  rankings category list. Industry tag where the list is vertical-specific.
+- FACTUAL SAFETY IS PARAMOUNT: never invent a person, title, company, or
+  achievement. Every entry must be a real, currently-identifiable individual or
+  company with a source. If you cannot verify enough real entries, deliver a
+  SHORTER list (and say so) rather than padding with fabricated names.
+`.trim();
+
 // Layered keyword model (from "Keyword Framework").
 export const KEYWORD_FRAMEWORK = `
 KEYWORD FRAMEWORK — map every piece to this layered model:
@@ -112,6 +138,15 @@ export const BLOG_CATEGORIES = Object.freeze([
   'Events & Summits',
 ]);
 
+// Rankings / Power List series (from "Rankings & Power Lists", Website Segments).
+export const RANKINGS_CATEGORIES = Object.freeze([
+  'Industry Leaders',
+  'Emerging Voices',
+  'Regional Spotlights',
+  'Themed Lists',
+  'Annual Power Lists',
+]);
+
 // Industry hubs (from "Industry Hubs") — used as the industry tag vocabulary.
 export const INDUSTRY_HUBS = Object.freeze([
   'Technology',
@@ -126,10 +161,12 @@ export const INDUSTRY_HUBS = Object.freeze([
   'Education & EdTech',
 ]);
 
-/** Assemble the full system prompt for a given stream ('news' | 'blog'). */
+/** Assemble the full system prompt for a given stream ('news' | 'blog' | 'rankings'). */
 export function buildStyleGuide(stream) {
-  const structure = stream === 'blog' ? BLOG_STRUCTURE : NEWS_STRUCTURE;
-  const categories = stream === 'blog' ? BLOG_CATEGORIES : NEWS_CATEGORIES;
+  const structure = stream === 'blog' ? BLOG_STRUCTURE
+    : stream === 'rankings' ? RANKINGS_STRUCTURE : NEWS_STRUCTURE;
+  const categories = stream === 'blog' ? BLOG_CATEGORIES
+    : stream === 'rankings' ? RANKINGS_CATEGORIES : NEWS_CATEGORIES;
   return [
     'You are an editorial writer for The Success Digest (TSD), a business-news',
     'publication for US and UK executives.',

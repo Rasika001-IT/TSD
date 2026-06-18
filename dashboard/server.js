@@ -26,7 +26,8 @@ import { PROFILE_OPTIONS, DEFAULT_COST_PROFILE } from '../agent/cost-profiles.js
 
 const MODEL_OPTIONS = ['auto', 'claude-sonnet-4-6', 'claude-opus-4-8', 'claude-haiku-4-5'];
 
-const STREAM_FOR_TYPE = { blog: 'blog' }; // everything else is a 'news' stream
+const STREAM_FOR_TYPE = { blog: 'blog', ranking_list: 'rankings' }; // everything else is a 'news' stream
+const VALID_STREAMS = new Set(['news', 'blog', 'rankings']);
 
 const app = express();
 app.use(express.json({ limit: '5mb' }));
@@ -226,8 +227,9 @@ app.post('/api/generate', (req, res) => {
   }
   const { stream = 'news', category, topic = null } = req.body ?? {};
   if (!category) return res.status(400).json({ error: 'category is required' });
-  const sourceId = `tsd-${stream}-manual-${Date.now()}`;
-  const job = startGeneration({ stream: stream === 'blog' ? 'blog' : 'news', type: stream, category, topicHint: topic, sourceId }, 'manual');
+  const s = VALID_STREAMS.has(stream) ? stream : 'news';
+  const sourceId = `tsd-${s}-manual-${Date.now()}`;
+  const job = startGeneration({ stream: s, type: s, category, topicHint: topic, sourceId }, 'manual');
   res.status(202).json({ accepted: true, sourceId, jobId: job.id });
 });
 

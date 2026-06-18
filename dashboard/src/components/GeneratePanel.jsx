@@ -15,6 +15,10 @@ const BLOG_CATEGORIES = [
   'Explainers & Deep Dives', 'Leadership & Strategy', 'Career & Executive Growth',
   'Money & Investing', 'Tech for Business Leaders', 'Executive Lifestyle', 'Events & Summits',
 ];
+const RANKINGS_CATEGORIES = [
+  'Industry Leaders', 'Emerging Voices', 'Regional Spotlights', 'Themed Lists', 'Annual Power Lists',
+];
+const CATEGORIES_BY_STREAM = { news: NEWS_CATEGORIES, blog: BLOG_CATEGORIES, rankings: RANKINGS_CATEGORIES };
 
 export function GeneratePanel({ onStarted, flash }) {
   const [stream, setStream] = useState('news');
@@ -22,11 +26,11 @@ export function GeneratePanel({ onStarted, flash }) {
   const [topic, setTopic] = useState('');
   const [busy, setBusy] = useState(false);
 
-  const categories = stream === 'blog' ? BLOG_CATEGORIES : NEWS_CATEGORIES;
+  const categories = CATEGORIES_BY_STREAM[stream] ?? NEWS_CATEGORIES;
 
   const onStream = (s) => {
     setStream(s);
-    setCategory((s === 'blog' ? BLOG_CATEGORIES : NEWS_CATEGORIES)[0]);
+    setCategory((CATEGORIES_BY_STREAM[s] ?? NEWS_CATEGORIES)[0]);
   };
 
   const run = async () => {
@@ -51,6 +55,7 @@ export function GeneratePanel({ onStarted, flash }) {
         <select value={stream} onChange={(e) => onStream(e.target.value)} disabled={busy}>
           <option value="news">News</option>
           <option value="blog">Blog</option>
+          <option value="rankings">Rankings</option>
         </select>
         <select value={category} onChange={(e) => setCategory(e.target.value)} disabled={busy}>
           {categories.map((c) => <option key={c} value={c}>{c}</option>)}
