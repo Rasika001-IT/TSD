@@ -157,10 +157,66 @@ app.get('/api/jobs', async (req, res) => {
 // off in the background and return immediately. The new/updated item appears in
 // the pending_review queue when it finishes — the dashboard already polls.
 
+// In-memory progress tracker. Generation is fire-and-forget background work, so
+// without this the dashboard can't tell whether a draft is researching, writing,
+// done, or FAILED (failures otherwise only reach the server log). The UI polls
+// GET /api/generation-jobs to render a live status with stage + percentage.
+const generationJobs = new Map(); // id -> job
+let genSeq = 0;
+
+// Stage → percentage. Research dominates wall-clock (~60%), so the bar weights it.
+const GEN_STAGES = {
+  queued: { pct: 5, label: 'Queued' },
+  researching: { pct: 30, label: 'Researching sources' },
+  writing: { pct: 70, label: 'Writing draft' },
+  saving: { pct: 92, label: 'Saving to review queue' },
+  done: { pct: 100, label: 'Ready for review' },
+  failed: { pct: 100, label: 'Failed' },
+};
+
+const FINISHED_TTL_MS = 5 * 60 * 1000; // keep finished jobs visible this long
+
+function pruneGenJobs() {
+  const now = Date.now();
+  for (const [id, j] of generationJobs) {
+    if (j.finishedAt && now - new Date(j.finishedAt).getTime() > FINISHED_TTL_MS) generationJobs.delete(id);
+  }
+}
+
+function setGenStage(job, stage, extra = {}) {
+  const meta = GEN_STAGES[stage] ?? {};
+  job.stage = stage;
+  job.stageLabel = meta.label ?? stage;
+  job.pct = meta.pct ?? job.pct;
+  Object.assign(job, extra);
+  if (stage === 'done' || stage === 'failed') {
+    job.status = stage;
+    job.finishedAt = new Date().toISOString();
+  }
+}
+
 function startGeneration(spec, label) {
-  generateAndQueue(spec)
-    .then((r) => console.log(`[generate] queued "${r.content.title}" (${label})`))
-    .catch((err) => console.error(`[generate] failed (${label}): ${err.message}`));
+  const id = `gen-${Date.now()}-${++genSeq}`;
+  const job = {
+    id, stream: spec.stream, category: spec.category, label,
+    stage: 'queued', stageLabel: GEN_STAGES.queued.label, pct: GEN_STAGES.queued.pct,
+    status: 'running', title: null, itemId: null, error: null,
+    startedAt: new Date().toISOString(), finishedAt: null,
+  };
+  generationJobs.set(id, job);
+  pruneGenJobs();
+
+  const onProgress = ({ stage }) => setGenStage(job, stage);
+  generateAndQueue(spec, { onProgress })
+    .then((r) => {
+      setGenStage(job, 'done', { title: r.content.title, itemId: r.content.id });
+      console.log(`[generate] queued "${r.content.title}" (${label})`);
+    })
+    .catch((err) => {
+      setGenStage(job, 'failed', { error: err.message });
+      console.error(`[generate] failed (${label}): ${err.message}`);
+    });
+  return job;
 }
 
 // On-demand generation: { stream, category, topic? }
@@ -171,8 +227,16 @@ app.post('/api/generate', (req, res) => {
   const { stream = 'news', category, topic = null } = req.body ?? {};
   if (!category) return res.status(400).json({ error: 'category is required' });
   const sourceId = `tsd-${stream}-manual-${Date.now()}`;
-  startGeneration({ stream: stream === 'blog' ? 'blog' : 'news', type: stream, category, topicHint: topic, sourceId }, 'manual');
-  res.status(202).json({ accepted: true, sourceId });
+  const job = startGeneration({ stream: stream === 'blog' ? 'blog' : 'news', type: stream, category, topicHint: topic, sourceId }, 'manual');
+  res.status(202).json({ accepted: true, sourceId, jobId: job.id });
+});
+
+// Live status of generation jobs (running + recently finished). The dashboard
+// polls this to render the progress UI and to surface background failures.
+app.get('/api/generation-jobs', (req, res) => {
+  pruneGenJobs();
+  const jobs = [...generationJobs.values()].sort((a, b) => new Date(b.startedAt) - new Date(a.startedAt));
+  res.json({ jobs });
 });
 
 // Regenerate an existing item in place ("redo" — reuses sourceId so the record
@@ -186,11 +250,11 @@ app.post('/api/items/:id/regenerate', async (req, res) => {
   if (!content) return res.status(404).json({ error: 'not found' });
   const stream = STREAM_FOR_TYPE[content.type] ?? 'news';
   const category = (content.taxonomies ?? []).find((t) => t.type === 'category')?.name;
-  startGeneration(
+  const job = startGeneration(
     { stream, type: stream, category, topicHint: req.body?.topic ?? null, sourceId: content.sourceId, scheduledFor: content.scheduledFor },
     `regenerate ${content.id}`
   );
-  res.status(202).json({ accepted: true });
+  res.status(202).json({ accepted: true, jobId: job.id });
 });
 
 // --- Scheduler on/off toggle -----------------------------------------------

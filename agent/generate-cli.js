@@ -32,6 +32,7 @@ function parseArgs(argv) {
 
 /** Generate one spec, attach spec warnings, persist to the review queue. */
 export async function generateAndQueue(spec, deps = {}) {
+  const onProgress = deps.onProgress ?? (() => {}); // stage callback for live UI
   // Honor dashboard-set settings (an explicit spec value wins if provided).
   const repo = await getRepo();
   const modelOverride = spec.modelOverride ?? (await repo.getSetting('model_override', null));
@@ -50,6 +51,7 @@ export async function generateAndQueue(spec, deps = {}) {
     content.editorial.editorialNotes = [content.editorial.editorialNotes, ...notes].filter(Boolean).join('\n\n');
   }
 
+  onProgress({ stage: 'saving' });
   const result = await publish(content); // pending_review ⇒ stored, not enqueued
   return { ...result, prominence, brief, warnings, cost };
 }

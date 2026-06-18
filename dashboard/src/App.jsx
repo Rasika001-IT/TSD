@@ -3,7 +3,7 @@
 // decisions (approve publishes live immediately), on-demand generation, the
 // auto-generation on/off toggle, a featured-image drop, and a Published view
 // for post-publication review.
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { api } from './api.js';
 import { Queue } from './components/Queue.jsx';
 import { Reader } from './components/Reader.jsx';
@@ -13,6 +13,7 @@ import { GeneratePanel } from './components/GeneratePanel.jsx';
 import { SchedulerToggle } from './components/SchedulerToggle.jsx';
 import { PublishedList } from './components/PublishedList.jsx';
 import { ControlsPanel } from './components/ControlsPanel.jsx';
+import { GenerationStatus } from './components/GenerationStatus.jsx';
 import { LoginGate } from './components/LoginGate.jsx';
 
 export default function App() {
@@ -32,6 +33,9 @@ export default function App() {
   const [profileOptions, setProfileOptions] = useState([]);
   const [windows, setWindows] = useState([]);
   const [authed, setAuthed] = useState(null); // null = checking, false = gated, true = in
+  const [genJobs, setGenJobs] = useState([]); // live generation progress
+  const [dismissed, setDismissed] = useState(() => new Set()); // finished jobs hidden by the user
+  const doneSeenRef = useRef(new Set()); // job ids we've already refreshed the queue for
 
   const flash = useCallback((msg, isErr = false) => {
     setToast({ msg, isErr });
@@ -77,9 +81,32 @@ export default function App() {
     }
   }, [flash]);
 
+  // Poll live generation progress. When a job newly finishes, pull its draft
+  // into the queue (the queue itself isn't otherwise polled).
+  const loadGenJobs = useCallback(async () => {
+    try {
+      const { jobs } = await api.listGenerationJobs();
+      setGenJobs(jobs);
+      let newlyDone = false;
+      for (const j of jobs) {
+        if (j.status === 'done' && !doneSeenRef.current.has(j.id)) {
+          doneSeenRef.current.add(j.id);
+          newlyDone = true;
+        }
+      }
+      if (newlyDone) loadQueue();
+    } catch { /* transient — keep last known state */ }
+  }, [loadQueue]);
+
   // Initial load: probe settings/auth first, then the queue once authed, plus a clock.
   useEffect(() => { loadSettings(); }, [loadSettings]);
-  useEffect(() => { if (authed === true) loadQueue(); }, [authed, loadQueue]);
+  useEffect(() => { if (authed === true) { loadQueue(); loadGenJobs(); } }, [authed, loadQueue, loadGenJobs]);
+  // While any draft is in flight, poll its progress every 2s (stops when none run).
+  useEffect(() => {
+    if (authed !== true || !genJobs.some((j) => j.status === 'running')) return;
+    const t = setInterval(loadGenJobs, 2000);
+    return () => clearInterval(t);
+  }, [authed, genJobs, loadGenJobs]);
   useEffect(() => {
     const t = setInterval(() => setClock(new Date()), 1000);
     return () => clearInterval(t);
@@ -123,7 +150,12 @@ export default function App() {
 
   const onImageUploaded = useCallback(() => loadDetail(activeId), [activeId, loadDetail]);
 
+  const dismissJob = useCallback((id) => {
+    setDismissed((cur) => new Set(cur).add(id));
+  }, []);
+
   const content = detail?.content ?? null;
+  const visibleJobs = genJobs.filter((j) => !dismissed.has(j.id));
 
   if (authed === false) {
     return <LoginGate onAuthed={() => { setAuthed(true); loadSettings(); loadQueue(); }} />;
@@ -165,7 +197,8 @@ export default function App() {
               onWindows={setWindows}
               flash={flash}
             />
-            <GeneratePanel onStarted={loadQueue} flash={flash} />
+            <GeneratePanel onStarted={loadGenJobs} flash={flash} />
+            <GenerationStatus jobs={visibleJobs} onDismiss={dismissJob} />
             <Queue items={items} activeId={activeId} onSelect={setActiveId} />
           </div>
           <Reader content={content} />

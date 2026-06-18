@@ -326,10 +326,13 @@ export async function generate(spec, deps = {}) {
     throw new Error('generate: ANTHROPIC_API_KEY is not set (and no client injected).');
   }
   const client = deps.client ?? (await defaultClient());
+  const onProgress = deps.onProgress ?? (() => {}); // stage callback for live UI
   const { modelOverride } = spec;
   const profile = resolveProfile(spec.costProfile);
 
+  onProgress({ stage: 'researching' });
   const { brief, prominence, usages } = await research(client, { ...spec, profile });
+  onProgress({ stage: 'writing' });
   const { draft, model, usage: writeUsage } = await write(client, { stream: spec.stream, brief, prominence, modelOverride, profile });
   const content = draftToCanonical(draft, {
     stream: spec.stream,

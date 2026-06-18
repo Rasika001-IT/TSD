@@ -35,6 +35,31 @@ body { margin: 0; font-family: system-ui, sans-serif; background: #f4f4f2; color
 .generate-panel button { width: 100%; padding: 0.5rem; background: #1a3a7f; color: #fff; border: none; cursor: pointer; }
 .generate-panel button:disabled { opacity: 0.6; cursor: default; }
 
+/* Live generation status */
+.gen-status { padding: 1rem; border-bottom: 2px solid #eee; background: #fff; }
+.gen-status h2 { font-size: 0.95rem; margin: 0 0 0.6rem; }
+.gen-status ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.7rem; }
+.gen-job { font-size: 0.8rem; }
+.gen-head { display: flex; align-items: center; gap: 0.4rem; }
+.gen-icon { font-size: 0.9rem; }
+.gen-job.running .gen-icon { color: #1a3a7f; display: inline-block; animation: gen-spin 1s linear infinite; }
+.gen-job.done .gen-icon { color: #1a7f37; }
+.gen-job.failed .gen-icon { color: #b3261e; }
+.gen-what { flex: 1; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.gen-pct { font-variant-numeric: tabular-nums; color: #555; font-size: 0.78rem; }
+.gen-dismiss { background: none; border: none; color: #999; cursor: pointer; font-size: 1rem; line-height: 1; padding: 0 0.2rem; }
+.gen-dismiss:hover { color: #444; }
+.gen-bar { height: 7px; background: #e7e9ee; border-radius: 999px; overflow: hidden; margin: 0.35rem 0; }
+.gen-fill { height: 100%; border-radius: 999px; background: #1a3a7f; transition: width 0.5s ease; }
+.gen-fill.running { background-image: linear-gradient(90deg, #1a3a7f 0%, #4f7bd6 50%, #1a3a7f 100%); background-size: 200% 100%; animation: gen-shimmer 1.2s linear infinite; }
+.gen-fill.done { background: #1a7f37; }
+.gen-fill.failed { background: #b3261e; }
+.gen-stage { color: #555; }
+.gen-job.done .gen-stage { color: #1a7f37; }
+.gen-error { color: #b3261e; }
+@keyframes gen-shimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+@keyframes gen-spin { to { transform: rotate(360deg); } }
+
 .review-rail .redo { width: 100%; margin-top: 0.5rem; padding: 0.5rem; background: #444; color: #fff; border: none; cursor: pointer; }
 .review-rail .notes { margin-top: 0.75rem; font-size: 0.8rem; }
 .review-rail .notes pre { white-space: pre-wrap; background: #f6f6f4; padding: 0.5rem; }

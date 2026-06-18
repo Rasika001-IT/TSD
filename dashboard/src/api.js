@@ -49,6 +49,7 @@ export const api = {
     request('/generate', { method: 'POST', body: JSON.stringify({ stream, category, topic }) }),
   regenerate: (id, topic = null) =>
     request(`/items/${id}/regenerate`, { method: 'POST', body: JSON.stringify({ topic }) }),
+  listGenerationJobs: () => request('/generation-jobs'),
   getSettings: () => request('/settings'),
   setScheduler: (enabled) =>
     request('/settings/scheduler', { method: 'POST', body: JSON.stringify({ enabled }) }),
