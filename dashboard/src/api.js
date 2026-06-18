@@ -55,6 +55,8 @@ export const api = {
     request('/settings/scheduler', { method: 'POST', body: JSON.stringify({ enabled }) }),
   setWindows: (windows) =>
     request('/settings/windows', { method: 'POST', body: JSON.stringify({ windows }) }),
+  setEditorialSchedule: (schedule) =>
+    request('/settings/editorial-schedule', { method: 'POST', body: JSON.stringify({ schedule }) }),
   setModel: (model) =>
     request('/settings/model', { method: 'POST', body: JSON.stringify({ model }) }),
   setProfile: (profile) =>

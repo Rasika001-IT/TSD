@@ -2,8 +2,9 @@
 // Generation controls that sit above the on-demand "Generate" panel:
 //  - Claude model dropdown ("Auto" = the built-in Sonnet / Opus-by-prominence
 //    logic; or force a specific model).
-//  - Publish-window calendar: toggle the times of day the auto-scheduler may
-//    use (the blog is scheduled to the earliest enabled window).
+//  - Editorial schedule: the weekly content-stream slots from the TSD standards
+//    (Tue Rankings, Thu Industry Hubs, Sat Reports + daily news), each toggleable.
+//    Streams not yet wired to the generation engine are flagged "soon".
 import React, { useState } from 'react';
 import { api } from '../api.js';
 
@@ -20,8 +21,8 @@ const PROFILE_LABELS = {
   'quality-first': 'Quality-first',
 };
 
-export function ControlsPanel({ model, modelOptions, profile, profileOptions, windows, onModel, onProfile, onWindows, flash }) {
-  const [savingWin, setSavingWin] = useState(false);
+export function ControlsPanel({ model, modelOptions, profile, profileOptions, schedule, onModel, onProfile, onSchedule, flash }) {
+  const [savingSched, setSavingSched] = useState(false);
 
   const changeModel = async (value) => {
     try { await api.setModel(value); onModel(value); flash(`Model: ${MODEL_LABELS[value] ?? value}`); }
@@ -33,12 +34,12 @@ export function ControlsPanel({ model, modelOptions, profile, profileOptions, wi
     catch (e) { flash(e.message, true); }
   };
 
-  const toggleWindow = async (id) => {
-    const next = windows.map((w) => (w.id === id ? { ...w, enabled: !w.enabled } : w));
-    setSavingWin(true);
-    try { const { publishWindows } = await api.setWindows(next); onWindows(publishWindows); }
+  const toggleSlot = async (id) => {
+    const next = (schedule ?? []).map((s) => (s.id === id ? { ...s, enabled: !s.enabled } : s));
+    setSavingSched(true);
+    try { const { editorialSchedule } = await api.setEditorialSchedule(next); onSchedule(editorialSchedule); }
     catch (e) { flash(e.message, true); }
-    finally { setSavingWin(false); }
+    finally { setSavingSched(false); }
   };
 
   return (
@@ -61,22 +62,28 @@ export function ControlsPanel({ model, modelOptions, profile, profileOptions, wi
         </select>
       </label>
 
-      <div className="windows">
-        <span className="windows-label">Publish windows (ET)</span>
-        <div className="window-grid">
-          {(windows ?? []).map((w) => (
-            <button
-              key={w.id}
-              className={`window-chip ${w.enabled ? 'on' : 'off'}`}
-              disabled={savingWin}
-              onClick={() => toggleWindow(w.id)}
-              title={w.enabled ? 'Enabled — click to disable' : 'Disabled — click to enable'}
-            >
-              {w.label}
-            </button>
+      <div className="schedule">
+        <span className="windows-label">Editorial schedule</span>
+        <ul className="schedule-list">
+          {(schedule ?? []).map((s) => (
+            <li key={s.id} className={`sched-slot ${s.enabled ? 'on' : 'off'}`}>
+              <button
+                className={`sched-row ${s.enabled ? 'on' : 'off'}`}
+                disabled={savingSched}
+                onClick={() => toggleSlot(s.id)}
+                title={s.description}
+              >
+                <span className="sched-day">{s.day}</span>
+                <span className="sched-label">
+                  {s.label}
+                  {!s.live && <span className="sched-soon" title="Scheduled — generator coming in a later build">soon</span>}
+                </span>
+                <span className={`sched-switch ${s.enabled ? 'on' : 'off'}`} aria-hidden="true" />
+              </button>
+            </li>
           ))}
-        </div>
-        <p className="hint">Auto-scheduled blogs publish at the earliest enabled window. News publishes ASAP on approval.</p>
+        </ul>
+        <p className="hint">The weekly content rhythm from the TSD editorial calendar. “Soon” streams are scheduled here but not yet auto-generated. News publishes ASAP on approval.</p>
       </div>
     </div>
   );

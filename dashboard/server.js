@@ -21,7 +21,7 @@ import { config } from '../bridge/config.js';
 import { generateAndQueue } from '../agent/generate-cli.js';
 import { generateAltText } from '../agent/alt-text.js';
 import { SCHEDULER_FLAG } from '../agent/scheduler.js';
-import { DEFAULT_PUBLISH_WINDOWS } from '../agent/editorial-calendar.js';
+import { DEFAULT_PUBLISH_WINDOWS, DEFAULT_EDITORIAL_SCHEDULE } from '../agent/editorial-calendar.js';
 import { PROFILE_OPTIONS, DEFAULT_COST_PROFILE } from '../agent/cost-profiles.js';
 
 const MODEL_OPTIONS = ['auto', 'claude-sonnet-4-6', 'claude-opus-4-8', 'claude-haiku-4-5'];
@@ -258,16 +258,31 @@ app.post('/api/items/:id/regenerate', async (req, res) => {
 });
 
 // --- Scheduler on/off toggle -----------------------------------------------
+
+// The editorial schedule is editorial canon (day/stream/labels) — only the
+// per-slot `enabled` flag is editor-controlled. We persist just {id, enabled}
+// and merge onto the canonical defaults so labels and `live` stay authoritative.
+async function getEditorialSchedule(repo) {
+  const stored = await repo.getSetting('editorial_schedule', null);
+  const enabledById = new Map((Array.isArray(stored) ? stored : []).map((s) => [s.id, !!s.enabled]));
+  return DEFAULT_EDITORIAL_SCHEDULE.map((s) => ({
+    ...s,
+    enabled: enabledById.has(s.id) ? enabledById.get(s.id) : s.enabled,
+  }));
+}
+
 app.get('/api/settings', async (req, res) => {
   const repo = await getRepo();
   const schedulerEnabled = await repo.getSetting(SCHEDULER_FLAG, false);
   const publishWindows = await repo.getSetting('publish_windows', DEFAULT_PUBLISH_WINDOWS);
+  const editorialSchedule = await getEditorialSchedule(repo);
   const modelOverride = await repo.getSetting('model_override', 'auto');
   const costProfile = await repo.getSetting('cost_profile', DEFAULT_COST_PROFILE);
   res.json({
     schedulerEnabled: !!schedulerEnabled,
     generationAvailable: config.anthropic.enabled,
     publishWindows,
+    editorialSchedule,
     modelOverride: modelOverride ?? 'auto',
     modelOptions: MODEL_OPTIONS,
     costProfile,
@@ -302,6 +317,21 @@ app.post('/api/settings/windows', async (req, res) => {
   const clean = windows.map((w) => ({ id: String(w.id), label: String(w.label), time: String(w.time), enabled: !!w.enabled }));
   await repo.setSetting('publish_windows', clean);
   res.json({ publishWindows: clean });
+});
+
+// Editor-managed editorial schedule (the weekly content-stream slots). Only the
+// `enabled` flag is editor-controlled; everything else is editorial canon.
+app.post('/api/settings/editorial-schedule', async (req, res) => {
+  const repo = await getRepo();
+  const incoming = Array.isArray(req.body?.schedule) ? req.body.schedule : null;
+  if (!incoming) return res.status(400).json({ error: 'schedule array required' });
+  const enabledById = new Map(incoming.map((s) => [String(s.id), !!s.enabled]));
+  const merged = DEFAULT_EDITORIAL_SCHEDULE.map((s) => ({
+    ...s,
+    enabled: enabledById.has(s.id) ? enabledById.get(s.id) : s.enabled,
+  }));
+  await repo.setSetting('editorial_schedule', merged.map((s) => ({ id: s.id, enabled: s.enabled })));
+  res.json({ editorialSchedule: merged });
 });
 
 // Claude model override ('auto' = the built-in Sonnet/Opus-by-prominence logic).

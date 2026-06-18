@@ -32,6 +32,7 @@ export default function App() {
   const [profile, setProfile] = useState('balanced');
   const [profileOptions, setProfileOptions] = useState([]);
   const [windows, setWindows] = useState([]);
+  const [schedule, setSchedule] = useState([]); // editorial weekly content-stream slots
   const [authed, setAuthed] = useState(null); // null = checking, false = gated, true = in
   const [genJobs, setGenJobs] = useState([]); // live generation progress
   const [dismissed, setDismissed] = useState(() => new Set()); // finished jobs hidden by the user
@@ -73,6 +74,7 @@ export default function App() {
       setProfile(s.costProfile ?? 'balanced');
       setProfileOptions(s.profileOptions ?? []);
       setWindows(s.publishWindows ?? []);
+      setSchedule(s.editorialSchedule ?? []);
       setAuthed(true);
     } catch (e) {
       if (e.status === 401) { setAuthed(false); return; }
@@ -191,10 +193,10 @@ export default function App() {
               modelOptions={modelOptions}
               profile={profile}
               profileOptions={profileOptions}
-              windows={windows}
+              schedule={schedule}
               onModel={setModel}
               onProfile={setProfile}
-              onWindows={setWindows}
+              onSchedule={setSchedule}
               flash={flash}
             />
             <GeneratePanel onStarted={loadGenJobs} flash={flash} />
