@@ -13,6 +13,7 @@ import { GeneratePanel } from './components/GeneratePanel.jsx';
 import { SchedulerToggle } from './components/SchedulerToggle.jsx';
 import { PublishedList } from './components/PublishedList.jsx';
 import { ControlsPanel } from './components/ControlsPanel.jsx';
+import { LoginGate } from './components/LoginGate.jsx';
 
 export default function App() {
   const [view, setView] = useState('review'); // 'review' | 'published'
@@ -30,6 +31,7 @@ export default function App() {
   const [profile, setProfile] = useState('balanced');
   const [profileOptions, setProfileOptions] = useState([]);
   const [windows, setWindows] = useState([]);
+  const [authed, setAuthed] = useState(null); // null = checking, false = gated, true = in
 
   const flash = useCallback((msg, isErr = false) => {
     setToast({ msg, isErr });
@@ -55,21 +57,29 @@ export default function App() {
     catch (e) { flash(e.message, true); }
   }, [flash]);
 
-  // Initial load: queue, settings, and a masthead clock.
-  useEffect(() => { loadQueue(); }, [loadQueue]);
-  useEffect(() => {
-    api.getSettings()
-      .then((s) => {
-        setSchedulerEnabled(s.schedulerEnabled);
-        setGenerationAvailable(s.generationAvailable);
-        setModel(s.modelOverride ?? 'auto');
-        setModelOptions(s.modelOptions ?? []);
-        setProfile(s.costProfile ?? 'balanced');
-        setProfileOptions(s.profileOptions ?? []);
-        setWindows(s.publishWindows ?? []);
-      })
-      .catch(() => {});
-  }, []);
+  // Loads settings AND doubles as the auth probe: a 401 means the stored token
+  // is missing/wrong → show the login gate; success → we're in.
+  const loadSettings = useCallback(async () => {
+    try {
+      const s = await api.getSettings();
+      setSchedulerEnabled(s.schedulerEnabled);
+      setGenerationAvailable(s.generationAvailable);
+      setModel(s.modelOverride ?? 'auto');
+      setModelOptions(s.modelOptions ?? []);
+      setProfile(s.costProfile ?? 'balanced');
+      setProfileOptions(s.profileOptions ?? []);
+      setWindows(s.publishWindows ?? []);
+      setAuthed(true);
+    } catch (e) {
+      if (e.status === 401) { setAuthed(false); return; }
+      setAuthed(true); // not an auth problem — let the desk render and flash the error
+      flash(e.message, true);
+    }
+  }, [flash]);
+
+  // Initial load: probe settings/auth first, then the queue once authed, plus a clock.
+  useEffect(() => { loadSettings(); }, [loadSettings]);
+  useEffect(() => { if (authed === true) loadQueue(); }, [authed, loadQueue]);
   useEffect(() => {
     const t = setInterval(() => setClock(new Date()), 1000);
     return () => clearInterval(t);
@@ -114,6 +124,13 @@ export default function App() {
   const onImageUploaded = useCallback(() => loadDetail(activeId), [activeId, loadDetail]);
 
   const content = detail?.content ?? null;
+
+  if (authed === false) {
+    return <LoginGate onAuthed={() => { setAuthed(true); loadSettings(); loadQueue(); }} />;
+  }
+  if (authed === null) {
+    return <div className="login-gate"><p>Connecting…</p></div>;
+  }
 
   return (
     <>
